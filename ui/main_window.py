@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter, 
-    QStackedWidget, QLabel, QFrame, QPushButton
+    QStackedWidget, QLabel, QFrame, QPushButton, QMessageBox
 )
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QObject, Slot, QTimer
 from PySide6.QtGui import QIcon, QColor
@@ -256,7 +256,40 @@ class MainWindow(QMainWindow):
         pass
 
     def on_remove_requested(self):
-        pass
+        indexes = self.lib_page.grid.selectionModel().selectedIndexes()
+        if not indexes:
+            return
+
+        count = len(indexes)
+        msg = f"¿Estás seguro de que deseas eliminar {count} elemento(s)?"
+        if count == 1:
+            item = self.lib_page.grid.model.itemFromIndex(indexes[0])
+            msg = f"¿Estás seguro de que deseas eliminar '{item.text()}'?"
+
+        res = QMessageBox.question(self, "Confirmar Eliminación", msg, 
+                                 QMessageBox.Yes | QMessageBox.No)
+        
+        if res == QMessageBox.Yes:
+            # Ordenar índices de mayor a menor para borrar sin alterar el orden del modelo
+            rows = sorted([idx.row() for idx in indexes], reverse=True)
+            for row in rows:
+                item = self.lib_page.grid.model.item(row)
+                path = item.data(Qt.UserRole + 2)
+                
+                # Intentar borrar el archivo físico si es local
+                if path and os.path.exists(path) and os.path.isfile(path):
+                    try:
+                        os.remove(path)
+                        logging.info(f"Archivo eliminado: {path}")
+                    except Exception as e:
+                        logging.error(f"No se pudo eliminar el archivo {path}: {e}")
+                
+                self.lib_page.grid.model.removeRow(row)
+            
+            # Limpiar selección y detener slideshow si es necesario
+            self.lib_page.grid.clearSelection()
+            self.on_selection_changed(None, None)
+            logging.info(f"Eliminados {count} elementos de la biblioteca.")
 
     def on_property_changed(self, key, value):
         logging.info(f"[UI] Property changed: {key} = {value}")
