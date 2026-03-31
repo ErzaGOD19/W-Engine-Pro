@@ -1,6 +1,7 @@
-from PySide6.QtCore import QObject, Signal, Slot
-from typing import Any
 import logging
+from typing import Any
+
+from PySide6.QtCore import QObject, Signal, Slot
 
 
 class EventBus(QObject):
@@ -25,7 +26,10 @@ class EventBus(QObject):
 
     def emit(self, event_name, data=None):
         """Emits an event to all subscribers."""
-        logging.debug(f"Event emitted: {event_name}")
+        logging.debug(f"[EventBus] Event emitted: {event_name} - {data}")
+        logging.debug(
+            f"[EventBus] Signal connections: {self.event_occurred.receivers(self.event_occurred)} receivers"
+        )
         self.event_occurred.emit(event_name, data)
 
     def subscribe(self, event_name, callback):

@@ -6,7 +6,6 @@ import subprocess
 import threading
 import time
 
-from engines.base_backend import BaseBackend
 from core.process_manager import ProcessManager
 from core.utils import (
     build_common_mpv_args,
@@ -15,6 +14,7 @@ from core.utils import (
     send_ipc_command,
     wait_for_ipc,
 )
+from engines.base_backend import BaseBackend
 
 SWAYSOCK_DEFAULT = "/run/user/1000/sway.sock"
 SOCKET_BASE_PATH = "/tmp/mpv-bg-socket-wayland"
@@ -46,6 +46,7 @@ class WaylandBackend(BaseBackend):
 
         if not is_kde:
             from core.desktop_helper import DesktopHelper
+
             DesktopHelper.set_static_blur_background(video_path)
 
         if is_kde:
@@ -67,7 +68,9 @@ class WaylandBackend(BaseBackend):
         return True
 
     def _start_fallback_mpv(self, config, video_path, clean_env, app_env):
-        logging.warning("[WaylandBackend] mpvpaper not found. Falling back to floating mpv.")
+        logging.warning(
+            "[WaylandBackend] mpvpaper not found. Falling back to floating mpv."
+        )
 
         socket_path = f"{self.base_socket_path}-0"
         if os.path.exists(socket_path):
@@ -144,11 +147,15 @@ class WaylandBackend(BaseBackend):
         elif compositor == "hyprland":
             self._apply_hyprland_rules(app_id)
         else:
-            logging.warning(f"[WaylandBackend] Unsupported compositor for window rules: {compositor}")
+            logging.warning(
+                f"[WaylandBackend] Unsupported compositor for window rules: {compositor}"
+            )
 
     def _detect_compositor(self):
         xdg = os.environ.get("XDG_CURRENT_DESKTOP", "").lower()
-        if "sway" in xdg or os.path.exists(os.environ.get("SWAYSOCK", SWAYSOCK_DEFAULT)):
+        if "sway" in xdg or os.path.exists(
+            os.environ.get("SWAYSOCK", SWAYSOCK_DEFAULT)
+        ):
             return "sway"
         if "hyprland" in xdg or os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
             return "hyprland"
@@ -164,7 +171,9 @@ class WaylandBackend(BaseBackend):
         try:
             window_id = self._find_sway_window(app_id)
             if not window_id:
-                logging.warning(f"[WaylandBackend] Window not found for app_id={app_id}")
+                logging.warning(
+                    f"[WaylandBackend] Window not found for app_id={app_id}"
+                )
                 return
 
             logging.info(f"[WaylandBackend] Found window {window_id} for {app_id}")
@@ -178,7 +187,9 @@ class WaylandBackend(BaseBackend):
             for cmd in commands:
                 result = subprocess.run(
                     ["swaymsg", cmd],
-                    capture_output=True, text=True, timeout=SWAYMSG_TIMEOUT
+                    capture_output=True,
+                    text=True,
+                    timeout=SWAYMSG_TIMEOUT,
                 )
                 if result.returncode != 0:
                     logging.warning(f"[WaylandBackend] swaymsg failed: {cmd}")
@@ -195,7 +206,9 @@ class WaylandBackend(BaseBackend):
     def _find_sway_window(self, app_id):
         result = subprocess.run(
             ["swaymsg", "-t", "get_tree"],
-            capture_output=True, text=True, timeout=SWAYMSG_TIMEOUT
+            capture_output=True,
+            text=True,
+            timeout=SWAYMSG_TIMEOUT,
         )
 
         if result.returncode != 0:
@@ -230,7 +243,9 @@ class WaylandBackend(BaseBackend):
         try:
             result = subprocess.run(
                 ["hyprctl", "clients", "-j"],
-                capture_output=True, text=True, timeout=SWAYMSG_TIMEOUT
+                capture_output=True,
+                text=True,
+                timeout=SWAYMSG_TIMEOUT,
             )
 
             if result.returncode != 0:
@@ -243,9 +258,11 @@ class WaylandBackend(BaseBackend):
                     for prop in ("watermark", "noBorder", "fullscreen"):
                         subprocess.run(
                             ["hyprctl", "dispatcher", "setprop", addr, prop, "true"],
-                            capture_output=True
+                            capture_output=True,
                         )
-                    logging.info(f"[WaylandBackend] Hyprland rules applied for {app_id}")
+                    logging.info(
+                        f"[WaylandBackend] Hyprland rules applied for {app_id}"
+                    )
                     break
 
         except subprocess.TimeoutExpired:
@@ -275,6 +292,7 @@ class WaylandBackend(BaseBackend):
 
     def update_setting(self, key, value):
         logging.debug(f"[WaylandBackend] update_setting: {key}={value}")
+        logging.info(f"[WaylandBackend] Active sockets: {self.active_sockets}")
 
         property_map = {
             "mute": "mute",
@@ -291,12 +309,24 @@ class WaylandBackend(BaseBackend):
             elif key == "gamma":
                 value = gamma_ui_to_mpv(value)
 
-            logging.debug(f"[WaylandBackend] set_property: {mpv_prop}={value}")
-            return send_ipc_command(self.active_sockets, "set_property", mpv_prop, value, timeout=SOCKET_TIMEOUT)
+            logging.info(
+                f"[WaylandBackend] Sending IPC: set_property {mpv_prop}={value}"
+            )
+            result = send_ipc_command(
+                self.active_sockets,
+                "set_property",
+                mpv_prop,
+                value,
+                timeout=SOCKET_TIMEOUT,
+            )
+            logging.info(f"[WaylandBackend] IPC result: {result}")
+            return result
 
         if key == "loop":
             if value == "Loop":
-                send_ipc_command(self.active_sockets, "set_property", "loop-file", "inf")
+                send_ipc_command(
+                    self.active_sockets, "set_property", "loop-file", "inf"
+                )
                 send_ipc_command(self.active_sockets, "set_property", "pause", False)
             else:
                 send_ipc_command(self.active_sockets, "set_property", "loop-file", "no")
@@ -306,7 +336,9 @@ class WaylandBackend(BaseBackend):
         return False
 
     def send_command(self, command, *args):
-        return send_ipc_command(self.active_sockets, command, *args, timeout=SOCKET_TIMEOUT)
+        return send_ipc_command(
+            self.active_sockets, command, *args, timeout=SOCKET_TIMEOUT
+        )
 
     def _build_mpv_args(self, config, socket_path, wid_needed=False):
         return build_common_mpv_args(config, socket_path, wid_needed)

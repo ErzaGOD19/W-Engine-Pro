@@ -62,9 +62,13 @@ class EngineController(QObject):
 
     @Slot(str, Any)
     def _on_event(self, event_name, data):
+        logging.info(f"[EngineController] Received event: {event_name} - {data}")
         if event_name == "config_changed":
             key = data.get("key")
             value = data.get("value")
+            logging.info(
+                f"[EngineController] Processing config_changed: key={key}, value={value}"
+            )
             self._apply_config_change(key, value)
 
     def _apply_config_change(self, key, value):
@@ -73,9 +77,27 @@ class EngineController(QObject):
         )
         logging.debug(f"Applying config change: {key} = {value}")
 
+        # Mute requires restart because --no-audio cannot be changed dynamically via IPC
+        if key == "mute":
+            logging.info(f"[CONTROLLER_DEBUG] Mute change requires restart")
+            if self.active_wallpapers:
+                self.health_monitor.trigger_grace_period(10.0)
+                current_activity_pause = getattr(
+                    self.activity_monitor, "_last_pause_state", False
+                )
+                current_pause_state = self.is_paused or current_activity_pause
+                self.health_monitor.set_paused(current_pause_state)
+                for monitor_id, video_path in list(self.active_wallpapers.items()):
+                    logging.info(
+                        f"[CONTROLLER_DEBUG] Restarting renderer for mute change"
+                    )
+                    self.renderer.restart(
+                        self.config, video_path, initial_pause=current_pause_state
+                    )
+            return
+
         dynamic_keys = [
             "volume",
-            "mute",
             "loop",
             "fit",
             "brightness",
@@ -85,7 +107,11 @@ class EngineController(QObject):
             "pause_mode",
         ]
         if key in dynamic_keys:
-            self.renderer.update_setting(key, value)
+            logging.info(
+                f"[CONTROLLER_DEBUG] Calling renderer.update_setting({key}, {value})"
+            )
+            result = self.renderer.update_setting(key, value)
+            logging.info(f"[CONTROLLER_DEBUG] renderer.update_setting result: {result}")
             return
 
         if key == "playback_mode":

@@ -1,21 +1,22 @@
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QLabel,
-    QPushButton,
-    QComboBox,
-    QGroupBox,
-    QFormLayout,
-    QHBoxLayout,
-    QListWidget,
-    QSpinBox,
-    QDoubleSpinBox,
-    QCheckBox,
-    QSlider,
-)
-from PySide6.QtCore import Qt, Signal, QTimer
-from PySide6.QtGui import QPixmap
 from typing import Any
+
+from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDoubleSpinBox,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QPushButton,
+    QSlider,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
 
 from core import i18n
 
@@ -26,8 +27,9 @@ class PropertiesPanel(QWidget):
     stopAllRequested = Signal()
     startRequested = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, config=None, parent=None):
         super().__init__(parent)
+        self.config = config
         self.setFixedWidth(320)
 
         # Debouncing to prevent IPC flooding and lag
@@ -73,7 +75,7 @@ class PropertiesPanel(QWidget):
 
         actions_layout = QHBoxLayout()
         actions_layout.addStretch()
-        
+
         self.remove_btn = QPushButton("Remove")
         self.remove_btn.setObjectName("remove_btn")
         self.remove_btn.clicked.connect(self.removeRequested.emit)
@@ -112,10 +114,10 @@ class PropertiesPanel(QWidget):
         form_layout = QFormLayout()
 
         self.mute_check = QCheckBox(i18n.t("mute_audio"))
-        self.mute_check.setChecked(True)
-        self.mute_check.toggled.connect(
-            lambda v: self._queue_update("mute", v)
-        )
+        # Initialize mute state from config (default True = muted)
+        mute_value = self.config.get("mute", True) if self.config else True
+        self.mute_check.setChecked(mute_value)
+        self.mute_check.toggled.connect(lambda v: self._queue_update("mute", v))
         form_layout.addRow("", self.mute_check)
 
         self.brightness_slider = QSlider(Qt.Horizontal)
@@ -210,7 +212,7 @@ class PropertiesPanel(QWidget):
         """Syncs sliders and combos with current config values."""
         self.blockSignals(True)
 
-        self.mute_check.setChecked(config.get("mute", True))
+        self.mute_check.setChecked(bool(config.get("mute", True)))
 
         self.brightness_slider.setValue(config.get("brightness", 0))
         self.contrast_slider.setValue(config.get("contrast", 0))

@@ -1,29 +1,30 @@
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QScrollArea,
-    QFrame,
-    QGridLayout,
-    QPushButton,
-    QComboBox,
-    QCheckBox,
-    QSlider,
-    QFormLayout,
-    QGroupBox,
-    QSpacerItem,
-    QSizePolicy,
-    QColorDialog,
-    QSpinBox,
-)
-from PySide6.QtCore import Qt, Signal, QUrl, QTimer, QSize
-from PySide6.QtGui import QIcon, QColor, QDesktopServices, QPixmap
-from ui.wallpaper_grid import WallpaperGrid
-from ui.sidebar import get_icon
 import os
 
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QColorDialog,
+    QComboBox,
+    QFormLayout,
+    QFrame,
+    QGridLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSlider,
+    QSpacerItem,
+    QSpinBox,
+    QVBoxLayout,
+    QWidget,
+)
+
 from core import i18n
+from ui.sidebar import get_icon
+from ui.wallpaper_grid import WallpaperGrid
 
 
 class BasePage(QWidget):
@@ -101,7 +102,9 @@ class MonitorPage(BasePage):
         form = QFormLayout(group)
 
         self.monitor_combo = QComboBox()
-        self.monitor_combo.addItems([i18n.t("auto"), i18n.t("screen_1"), i18n.t("screen_2")])
+        self.monitor_combo.addItems(
+            [i18n.t("auto"), i18n.t("screen_1"), i18n.t("screen_2")]
+        )
         if self.config:
             self.monitor_combo.setCurrentText(self.config.get("target_monitor", "Auto"))
             self.monitor_combo.currentTextChanged.connect(
@@ -114,7 +117,9 @@ class MonitorPage(BasePage):
         layout_group = QGroupBox(i18n.t("layout_mode"))
         layout_form = QFormLayout(layout_group)
         self.layout_mode = QComboBox()
-        self.layout_mode.addItems([i18n.t("individual"), i18n.t("duplicate"), i18n.t("extended")])
+        self.layout_mode.addItems(
+            [i18n.t("individual"), i18n.t("duplicate"), i18n.t("extended")]
+        )
         if self.config:
             self.layout_mode.setCurrentText(
                 self.config.get("layout_mode", "Individual")
@@ -137,7 +142,14 @@ class DesignPage(BasePage):
         style_form = QFormLayout(style_group)
 
         self.theme_combo = QComboBox()
-        self.theme_combo.addItems([i18n.t("dark"), i18n.t("light"), i18n.t("material_dark"), i18n.t("fusion_v15")])
+        self.theme_combo.addItems(
+            [
+                i18n.t("dark"),
+                i18n.t("light"),
+                i18n.t("material_dark"),
+                i18n.t("fusion_v15"),
+            ]
+        )
         if self.config:
             self.theme_combo.setCurrentText(self.config.get("theme", i18n.t("dark")))
             self.theme_combo.currentTextChanged.connect(self._on_theme_preset_changed)
@@ -300,7 +312,13 @@ class SettingsPage(BasePage):
         gen_form.addRow(self.pause_active)
 
         self.pause_mode = QComboBox()
-        self.pause_mode.addItems([i18n.t("pause_window"), i18n.t("pause_maximized"), i18n.t("pause_fullscreen")])
+        self.pause_mode.addItems(
+            [
+                i18n.t("pause_window"),
+                i18n.t("pause_maximized"),
+                i18n.t("pause_fullscreen"),
+            ]
+        )
 
         self.mode_map = {
             i18n.t("pause_window"): "Any Window",
@@ -324,7 +342,9 @@ class SettingsPage(BasePage):
         perf_form = QFormLayout(perf_group)
 
         self.engine_combo = QComboBox()
-        self.engine_combo.addItems([i18n.t("engine_mpv"), i18n.t("engine_web"), i18n.t("engine_parallax")])
+        self.engine_combo.addItems(
+            [i18n.t("engine_mpv"), i18n.t("engine_web"), i18n.t("engine_parallax")]
+        )
         if self.config:
             self.engine_combo.setCurrentText(self.config.get("engine", "mpv"))
             self.engine_combo.currentTextChanged.connect(
@@ -333,9 +353,14 @@ class SettingsPage(BasePage):
         perf_form.addRow(i18n.t("rendering_engine") + ":", self.engine_combo)
 
         self.resolution_combo = QComboBox()
-        self.resolution_combo.addItems([
-            i18n.t("res_native"), i18n.t("res_1080p"), i18n.t("res_720p"), i18n.t("res_480p")
-        ])
+        self.resolution_combo.addItems(
+            [
+                i18n.t("res_native"),
+                i18n.t("res_1080p"),
+                i18n.t("res_720p"),
+                i18n.t("res_480p"),
+            ]
+        )
         if self.config:
             self.resolution_combo.setCurrentText(
                 self.config.get("video_resolution", "Native")
@@ -396,7 +421,7 @@ class SettingsPage(BasePage):
         audio_form = QFormLayout(audio_group)
         self.mute_audio = QCheckBox(i18n.t("mute_audio"))
         if self.config:
-            self.mute_audio.setChecked(self.config.get("mute", True))
+            self.mute_audio.setChecked(bool(self.config.get("mute", True)))
             self.mute_audio.stateChanged.connect(
                 lambda s: self.config.set("mute", s == 2)
             )
@@ -434,8 +459,9 @@ class SettingsPage(BasePage):
         self.config.set("video_cache", val)
 
     def _on_install_gnome_ext(self):
-        from core.desktop_helper import DesktopHelper
         from PySide6.QtWidgets import QMessageBox
+
+        from core.desktop_helper import DesktopHelper
 
         success, message = DesktopHelper.install_extension()
         if success:

@@ -1,8 +1,7 @@
+import json
 import logging
 import os
 import socket
-import json
-
 
 ENV_VARS_TO_STRIP = [
     "LD_LIBRARY_PATH",
@@ -51,25 +50,29 @@ def build_common_mpv_args(config, socket_path, wid_needed=False):
         args.append("--wid=%WID")
 
     loop = "inf" if config.get_setting("loop", "Loop") == "Loop" else "no"
-    args.extend([
-        f"--loop-file={loop}",
-        f"--mute={'yes' if config.get_setting('mute', True) else 'no'}",
-        f"--hwdec={config.get_setting('hwdec', 'auto-safe')}",
-        "--vo=gpu",
-        "--gpu-context=auto",
-        "--profile=low-latency",
-        "--untimed",
-        "--panscan=1.0",
-        "--keep-open=yes",
-        f"--input-ipc-server={socket_path}",
-        "--no-osc",
-        "--no-osd-bar",
-        "--no-input-default-bindings",
-        "--idle",
-    ])
+    mute_value = config.get_setting("mute", True)
+    logging.info(f"[build_common_mpv_args] mute config value: {mute_value}")
+    args.extend(
+        [
+            f"--loop-file={loop}",
+            f"--mute={'yes' if mute_value else 'no'}",
+            f"--hwdec={config.get_setting('hwdec', 'auto-safe')}",
+            "--vo=gpu",
+            "--gpu-context=auto",
+            "--profile=low-latency",
+            "--untimed",
+            "--panscan=1.0",
+            "--keep-open=yes",
+            f"--input-ipc-server={socket_path}",
+            "--no-osc",
+            "--no-osd-bar",
+            "--no-input-default-bindings",
+            "--idle",
+        ]
+    )
 
-    if config.get_setting("no_audio", True):
-        args.append("--no-audio")
+    # Note: We don't use --no-audio here because we want to be able to toggle
+    # mute dynamically via IPC. Instead, we use --mute=yes/no which can be changed.
 
     # Video resolution filter
     res_setting = config.get_setting("video_resolution", "Nativa")
@@ -104,11 +107,13 @@ def build_common_mpv_args(config, socket_path, wid_needed=False):
 def send_ipc_command(socket_paths, command, *args, timeout=0.05):
     """Send a command to one or more mpv IPC sockets."""
     if not socket_paths:
+        logging.warning(f"[send_ipc_command] No socket paths provided")
         return False
 
     success = True
     for socket_path in socket_paths:
         if not os.path.exists(socket_path):
+            logging.warning(f"[send_ipc_command] Socket does not exist: {socket_path}")
             success = False
             continue
 
@@ -118,7 +123,14 @@ def send_ipc_command(socket_paths, command, *args, timeout=0.05):
                 client.connect(socket_path)
                 msg = {"command": [command] + list(args)}
                 client.sendall((json.dumps(msg) + "\n").encode())
-        except (socket.error, socket.timeout, BrokenPipeError, ConnectionRefusedError):
+                logging.debug(f"[send_ipc_command] Sent: {msg} to {socket_path}")
+        except (
+            socket.error,
+            socket.timeout,
+            BrokenPipeError,
+            ConnectionRefusedError,
+        ) as e:
+            logging.warning(f"[send_ipc_command] Failed to send to {socket_path}: {e}")
             success = False
 
     return success
@@ -130,6 +142,7 @@ def wait_for_ipc(sockets, attempts=10, interval=0.1):
         if sockets and all(os.path.exists(s) for s in sockets):
             return True
         import time
+
         time.sleep(interval)
     return False
 

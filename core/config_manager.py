@@ -1,9 +1,11 @@
 import json
-import os
 import logging
-from core.event_bus import EventBus
-from PySide6.QtCore import QTimer, QObject, Signal
+import os
 from typing import Any
+
+from PySide6.QtCore import QObject, QTimer, Signal
+
+from core.event_bus import EventBus
 
 
 class ConfigManager(QObject):
@@ -33,8 +35,9 @@ class ConfigManager(QObject):
         else:
             self.data = {}
 
-        # Force mute default to True (wallpaper should be silent by default)
-        if self.data.get("mute") is False:
+        # Set default mute value only if not present (first run)
+        # Default to True (muted) as wallpaper should be silent by default
+        if "mute" not in self.data:
             self.data["mute"] = True
             self.save_timer.start(500)
 
@@ -55,6 +58,9 @@ class ConfigManager(QObject):
         if self.data.get(key) != value:
             self.data[key] = value
             self.setting_changed.emit(key, value)
+            logging.info(
+                f"[ConfigManager] Emitting config_changed: key={key}, value={value}"
+            )
             self.event_bus.emit("config_changed", {"key": key, "value": value})
 
             # Skip saving for volatile keys (starting with _)

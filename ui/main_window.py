@@ -1,33 +1,34 @@
+import logging
+import os
+import random
+from typing import Any
+
+from PySide6.QtCore import QSize, Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtGui import QColor, QKeyEvent, QPalette
 from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
+    QApplication,
+    QFrame,
     QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
     QSplitter,
     QStackedWidget,
-    QLabel,
-    QFrame,
-    QPushButton,
-    QMessageBox,
-    QApplication,
-    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, QSize, QThread, Signal, Slot, QTimer
-from PySide6.QtGui import QColor, QPalette, QKeyEvent
-from typing import Any
-import os
-import logging
-import random
 
-from ui.sidebar import Sidebar
-from ui.pages import LibraryPage, MonitorPage, AboutPage
-from ui.settings_panel import SettingsPanel
-from ui.diagnostics_panel import DiagnosticsPanel
-from ui.properties_panel import PropertiesPanel
-from ui.url_dialog import UrlDialog
-from ui.styles import STYLE_TEMPLATE
-from core.event_bus import EventBus
 from core import i18n
+from core.event_bus import EventBus
+from ui.diagnostics_panel import DiagnosticsPanel
+from ui.pages import AboutPage, LibraryPage, MonitorPage
+from ui.properties_panel import PropertiesPanel
+from ui.settings_panel import SettingsPanel
+from ui.sidebar import Sidebar
+from ui.styles import STYLE_TEMPLATE
+from ui.url_dialog import UrlDialog
 
 
 class LibraryLoaderWorker(QThread):
@@ -51,7 +52,7 @@ class LibraryLoaderWorker(QThread):
 
 class MainWindow(QMainWindow):
     theme_changed = Signal()
-    
+
     def __init__(self, controller=None, config=None, resources=None):
         super().__init__()
         self.controller = controller
@@ -111,7 +112,7 @@ class MainWindow(QMainWindow):
 
         self.content_splitter.addWidget(self.pages)
 
-        self.props_panel = PropertiesPanel()
+        self.props_panel = PropertiesPanel(config=self.config)
         self.props_panel.propertyChanged.connect(self.on_property_changed)
         self.props_panel.removeRequested.connect(self.on_remove_requested)
         self.props_panel.stopAllRequested.connect(self.on_stop_all)
@@ -154,6 +155,7 @@ class MainWindow(QMainWindow):
         text_color = self.config.get("ui_text_color", "#ffffff")
 
         from ui.sidebar import set_icon_theme_color
+
         set_icon_theme_color(text_color)
 
         self._apply_theme(theme_name, accent_color)
@@ -261,6 +263,7 @@ class MainWindow(QMainWindow):
         self.theme_changed.emit()
 
         from ui.sidebar import set_icon_theme_color
+
         set_icon_theme_color(text_color)
         self.sidebar.refresh_icons()
 
@@ -418,10 +421,10 @@ class MainWindow(QMainWindow):
             item = self.lib_page.grid.model.item(unique_rows[0])
             msg = f"{i18n.t('confirm_delete_single').format(name=item.text())}"
         else:
-            msg = i18n.t('confirm_delete_multiple').format(count=count)
+            msg = i18n.t("confirm_delete_multiple").format(count=count)
 
         res = QMessageBox.question(
-            self, i18n.t('confirm_delete_title'), msg, QMessageBox.Yes | QMessageBox.No
+            self, i18n.t("confirm_delete_title"), msg, QMessageBox.Yes | QMessageBox.No
         )
 
         if res == QMessageBox.Yes:

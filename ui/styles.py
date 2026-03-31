@@ -77,7 +77,7 @@ QPushButton#nav_btn[active="true"] {
 /* Action Buttons (Apply, Stop, Add, etc.) */
 QPushButton#apply_btn, QPushButton#add_btn, QPushButton#stop_btn, QPushButton#remove_btn {
     background-color: {{ACCENT_COLOR}};
-    color: white; 
+    color: white;
     font-weight: bold;
     border: 1px solid rgba(255, 255, 255, 0.1);
     min-width: 110px; /* Reduced from 140px */
@@ -192,6 +192,35 @@ QToolTip {
     border: 1px solid {{ACCENT_COLOR}};
     border-radius: 4px;
     padding: 4px;
+}
+
+/* CheckBox Styles */
+QCheckBox {
+    spacing: 8px;
+    color: {{TEXT_COLOR}};
+}
+
+QCheckBox::indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+QCheckBox::indicator:hover {
+    border: 2px solid {{ACCENT_COLOR}};
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+QCheckBox::indicator:checked {
+    background-color: {{ACCENT_COLOR}};
+    border: 2px solid {{ACCENT_COLOR}};
+}
+
+QCheckBox::indicator:checked:hover {
+    background-color: {{ACCENT_COLOR}};
+    border: 2px solid white;
 }
 """
 
