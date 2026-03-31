@@ -49,7 +49,10 @@ def main():
     config = ConfigManager()
 
     # Gestionar Autostart según configuración
-    DesktopHelper.setup_autostart(config.get_setting("autostart", False))
+    DesktopHelper.setup_autostart(
+        config.get_setting("autostart", False),
+        config.get_setting("start_minimized", False),
+    )
 
     resources = ResourceManager(config)
     controller = EngineController(config_manager=config)
@@ -58,6 +61,11 @@ def main():
     try:
         window = MainWindow(controller=controller, config=config, resources=resources)
         window.setWindowIcon(app_icon)
+
+        # Check if should start minimized
+        start_minimized_flag = "--minimized" in sys.argv
+        start_minimized_config = config.get_setting("start_minimized", False)
+        should_start_minimized = start_minimized_flag or start_minimized_config
 
         tray_icon = QSystemTrayIcon(app_icon, app)
         tray_menu = QMenu()
@@ -84,7 +92,12 @@ def main():
         tray_icon.setContextMenu(tray_menu)
         tray_icon.show()
 
-        window.show()
+        # Show window normally or hide if start minimized
+        if should_start_minimized:
+            logging.info("[Main] Starting minimized (system tray only)")
+            # Don't call window.show() - keep it hidden
+        else:
+            window.show()
 
         # FORCE START IMMEDIATELY FOR DEBUGGING
         last_wp = config.get_setting("last_wallpaper")

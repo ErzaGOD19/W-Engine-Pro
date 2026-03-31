@@ -105,7 +105,7 @@ class DesktopHelper:
         return DesktopHelper._cached_profile
 
     @staticmethod
-    def setup_autostart(enabled=True):
+    def setup_autostart(enabled=True, start_minimized=False):
         """Crea o elimina el archivo de autostart en ~/.config/autostart."""
         autostart_dir = os.path.expanduser("~/.config/autostart")
         desktop_file = os.path.join(autostart_dir, "wengine-pro.desktop")
@@ -117,17 +117,13 @@ class DesktopHelper:
 
         os.makedirs(autostart_dir, exist_ok=True)
 
-        appimage_path = os.environ.get("APPIMAGE")
-        if not appimage_path:
-            main_script = os.path.join(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "main.py"
-            )
-            appimage_path = f"{sys.executable} {main_script}"
+        # Detect execution method: Flatpak, AppImage, or direct Python
+        exec_command = DesktopHelper._get_autostart_command(start_minimized)
 
         content = f"""[Desktop Entry]
 Type=Application
 Name=W-Engine Pro
-Exec={appimage_path} --autostart
+Exec={exec_command}
 Icon=wengine
 Comment=Start W-Engine Pro on login
 Categories=Utility;
@@ -139,6 +135,34 @@ Terminal=false
             logging.info(f"Autostart configurado en: {desktop_file}")
         except Exception as e:
             logging.error(f"Error al configurar autostart: {e}")
+
+    @staticmethod
+    def _get_autostart_command(start_minimized=False):
+        """Generate the appropriate command for autostart based on how the app is running."""
+        flags = "--autostart"
+        if start_minimized:
+            flags += " --minimized"
+
+        # Check if running as Flatpak
+        if DesktopHelper._is_flatpak():
+            # Get the Flatpak application ID
+            flatpak_id = os.environ.get("FLATPAK_ID", "org.wengine.Pro")
+            return f"flatpak run {flatpak_id} {flags}"
+
+        # Check if running as AppImage
+        appimage_path = os.environ.get("APPIMAGE")
+        if appimage_path:
+            return f"{appimage_path} {flags}"
+
+        # Fallback: direct Python execution
+        main_script = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "main.py"
+        )
+        if os.path.exists(main_script):
+            return f"{sys.executable} {main_script} {flags}"
+
+        # Last resort: try to find wengine-pro in PATH
+        return f"wengine-pro {flags}"
 
     @staticmethod
     def is_gnome():
@@ -247,7 +271,12 @@ Terminal=false
                 .strip("'")
             )
             return uri, uri_dark
-        except (subprocess.CalledProcessError, FileNotFoundError, UnicodeDecodeError, AttributeError):
+        except (
+            subprocess.CalledProcessError,
+            FileNotFoundError,
+            UnicodeDecodeError,
+            AttributeError,
+        ):
             return None, None
 
     @staticmethod
@@ -437,13 +466,13 @@ Terminal=false
     @staticmethod
     def _get_protocol():
         compositor = DesktopHelper._get_compositor()
-        
+
         if compositor in ["Sway", "Hyprland", "River", "Wayfire", "Openbox"]:
             return "wayland"
-        
+
         if os.environ.get("WAYLAND_DISPLAY"):
             return "wayland"
-        
+
         if os.environ.get("DISPLAY"):
             return "x11"
 

@@ -341,4 +341,7 @@ class WaylandBackend(BaseBackend):
         )
 
     def _build_mpv_args(self, config, socket_path, wid_needed=False):
-        return build_common_mpv_args(config, socket_path, wid_needed)
+        video_path = config.get_setting("last_wallpaper", None)
+        return build_common_mpv_args(
+            config, socket_path, wid_needed, video_path=video_path
+        )

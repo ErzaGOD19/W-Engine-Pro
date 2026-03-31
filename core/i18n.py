@@ -4,8 +4,8 @@ Default language is English. Auto-detects system locale.
 This module exposes t(key) for translations and allows runtime language switching.
 """
 
-import os
 import locale
+import os
 
 TRANSLATIONS = {
     "en": {
@@ -14,7 +14,6 @@ TRANSLATIONS = {
         "show_interface": "Show Interface",
         "pause_resume": "Pause/Resume",
         "exit": "Exit",
-        
         # Sidebar
         "library": "Library",
         "monitors": "Monitors",
@@ -22,7 +21,6 @@ TRANSLATIONS = {
         "diagnostics": "Diagnostics",
         "settings": "Settings",
         "about": "About",
-        
         # Library
         "select_wallpaper": "Select a wallpaper",
         "no_wallpapers": "No wallpapers found",
@@ -33,7 +31,6 @@ TRANSLATIONS = {
         "start": "Start",
         "stop": "Stop",
         "stop_all": "Stop All",
-        
         # Properties Panel
         "playback_settings": "Playback Settings",
         "volume": "Volume",
@@ -48,7 +45,6 @@ TRANSLATIONS = {
         "random_themes": "Random Themes",
         "change_every": "Change every",
         "minutes": "min",
-        
         # Settings
         "general": "General",
         "audio": "Audio",
@@ -73,13 +69,11 @@ TRANSLATIONS = {
         "pause_window": "Window Active",
         "pause_maximized": "Maximized",
         "pause_fullscreen": "Fullscreen",
-        
         # Themes
         "dark": "Dark",
         "light": "Light",
         "material_dark": "Material Dark",
         "fusion_v15": "Fusion V1.5",
-        
         # Diagnostics
         "backend": "Backend",
         "protocol": "Protocol",
@@ -106,7 +100,6 @@ TRANSLATIONS = {
         "label_units": "Units",
         "cache_config": "Cache Config",
         "cpu_load": "CPU Load",
-        
         # Monitor
         "display": "Display",
         "layout_mode": "Layout Mode",
@@ -120,13 +113,11 @@ TRANSLATIONS = {
         "fit": "Fit",
         "stretch": "Stretch",
         "cover": "Cover",
-        
         # Messages
         "wallpaper_applied": "Wallpaper applied successfully",
         "wallpaper_removed": "Wallpaper removed",
         "settings_saved": "Settings saved",
         "error_loading": "Error loading wallpaper",
-        
         # About
         "version": "Version",
         "author": "Developed by Alexander",
@@ -163,8 +154,6 @@ TRANSLATIONS = {
         "performance_title": "Performance & Video",
         "rendering_engine": "Rendering Engine",
         "engine_mpv": "mpv",
-        "engine_web": "web",
-        "engine_parallax": "parallax",
         "video_resolution": "Video Resolution",
         "res_native": "Native",
         "res_1080p": "1080p (Full HD)",
@@ -197,7 +186,6 @@ TRANSLATIONS = {
         "show_interface": "Mostrar Interfaz",
         "pause_resume": "Pausar/Reanudar",
         "exit": "Salir",
-        
         # Sidebar
         "library": "Biblioteca",
         "monitors": "Monitores",
@@ -205,7 +193,6 @@ TRANSLATIONS = {
         "diagnostics": "Diagnóstico",
         "settings": "Ajustes",
         "about": "Acerca de",
-        
         # Library
         "select_wallpaper": "Selecciona un fondo",
         "fullscreen_tooltip": "Pantalla Completa (F11)",
@@ -220,7 +207,6 @@ TRANSLATIONS = {
         "start": "Iniciar",
         "stop": "Detener",
         "stop_all": "Detener Todo",
-        
         # Properties Panel
         "playback_settings": "Ajustes de Reproducción",
         "volume": "Volumen",
@@ -235,7 +221,6 @@ TRANSLATIONS = {
         "random_themes": "Temas Aleatorios",
         "change_every": "Cambiar cada",
         "minutes": "min",
-        
         # Settings
         "general": "General",
         "audio": "Audio",
@@ -263,13 +248,11 @@ TRANSLATIONS = {
         "select_color": "Seleccionar Color",
         "accent_color": "Color Acento",
         "custom_colors": "Colores Personalizados",
-         
         # Themes
         "dark": "Oscuro",
         "light": "Claro",
         "material_dark": "Material Oscuro",
         "fusion_v15": "Fusion V1.5",
-        
         # Diagnostics
         "backend": "Backend",
         "protocol": "Protocolo",
@@ -296,7 +279,6 @@ TRANSLATIONS = {
         "label_units": "Unidades",
         "cache_config": "Configuración de Cache",
         "cpu_load": "Carga de CPU",
-        
         # Monitor
         "display": "Pantalla",
         "layout_mode": "Modo de Diseño",
@@ -310,13 +292,11 @@ TRANSLATIONS = {
         "fit": "Ajustar",
         "stretch": "Estirar",
         "cover": "Cubrir",
-        
         # Messages
         "wallpaper_applied": "Wallpaper aplicado correctamente",
         "wallpaper_removed": "Wallpaper eliminado",
         "settings_saved": "Configuración guardada",
         "error_loading": "Error al cargar wallpaper",
-        
         # About
         "version": "Versión",
         "author": "Desarrollado por Alexander",
@@ -352,8 +332,6 @@ TRANSLATIONS = {
         "performance_title": "Rendimiento y Video",
         "rendering_engine": "Motor de Renderizado",
         "engine_mpv": "mpv",
-        "engine_web": "web",
-        "engine_parallax": "parallax",
         "video_resolution": "Resolución de Video",
         "res_native": "Nativa",
         "res_1080p": "1080p (Full HD)",
@@ -397,16 +375,16 @@ def get_system_locale():
 def get_current_language():
     """Get current language from config or system locale."""
     from core.config_manager import ConfigManager
-    
+
     config = ConfigManager()
     lang = config.get_setting("language", None)
-    
+
     if lang is None:
         lang = get_system_locale()
         if lang not in TRANSLATIONS:
             lang = "en"
         config.set_setting("language", lang)
-    
+
     return lang
 
 
@@ -418,7 +396,7 @@ def set_language(lang_code):
     """Set the current language (updates runtime cache and config)."""
     global _current_lang
     from core.config_manager import ConfigManager
-    
+
     config = ConfigManager()
     config.set_setting("language", lang_code)
     _current_lang = lang_code
@@ -432,7 +410,7 @@ def t(key, lang=None):
             lang = _current_lang
         else:
             lang = get_current_language()
-    
+
     return TRANSLATIONS.get(lang, TRANSLATIONS["en"]).get(key, key)
 
 

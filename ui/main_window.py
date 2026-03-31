@@ -31,22 +31,63 @@ from ui.styles import STYLE_TEMPLATE
 from ui.url_dialog import UrlDialog
 
 
+class ThumbnailLoaderWorker(QThread):
+    """Worker to load thumbnail in background and update UI when ready."""
+
+    thumbnailReady = Signal(str, str)  # url, thumbnail_path
+
+    def __init__(self, resources, url):
+        super().__init__()
+        self.resources = resources
+        self.url = url
+
+    def run(self):
+        if self.resources and self.url:
+            thumb_path = self.resources.get_thumbnail(self.url)
+            if thumb_path:
+                self.thumbnailReady.emit(self.url, thumb_path)
+
+
 class LibraryLoaderWorker(QThread):
     itemLoaded = Signal(str, str, str, str)
     finished = Signal()
 
-    def __init__(self, resources):
+    def __init__(self, resources, config=None):
         super().__init__()
         self.resources = resources
+        self.config = config
 
     def run(self):
-        if not self.resources:
-            return
-        wallpapers = self.resources.list_local_wallpapers()
-        for v in wallpapers:
-            name = os.path.basename(v)
-            thumb = self.resources.get_thumbnail(v)
-            self.itemLoaded.emit(name, "Video", thumb, v)
+        # Load local wallpapers
+        if self.resources:
+            wallpapers = self.resources.list_local_wallpapers()
+            for v in wallpapers:
+                name = os.path.basename(v)
+                thumb = self.resources.get_thumbnail(v)
+                self.itemLoaded.emit(name, "Video", thumb, v)
+
+        # Load remote wallpapers from config
+        if self.config:
+            remote_list = self.config.get_setting("remote_wallpapers", [])
+            for entry in remote_list:
+                if isinstance(entry, dict):
+                    url = entry.get("url")
+                    name = entry.get("name", url.split("/")[-1] if url else "Remote")
+                    w_type = entry.get("type", "Web")
+                elif isinstance(entry, str):
+                    url = entry
+                    name = url.split("/")[-1]
+                    w_type = "Web"
+                else:
+                    continue
+
+                # Generate thumbnail for remote URLs
+                thumb = None
+                if self.resources and url:
+                    thumb = self.resources.get_thumbnail(url)
+
+                self.itemLoaded.emit(name, w_type, thumb, url)
+
         self.finished.emit()
 
 
@@ -315,9 +356,20 @@ class MainWindow(QMainWindow):
 
     def _start_library_loading(self):
         self.lib_page.grid.clear()
-        self.loader_thread = LibraryLoaderWorker(self.resources)
+        self.loader_thread = LibraryLoaderWorker(self.resources, self.config)
         self.loader_thread.itemLoaded.connect(self._on_wallpaper_loaded)
+        self.loader_thread.finished.connect(self._on_library_load_finished)
         self.loader_thread.start()
+
+    def _on_library_load_finished(self):
+        """Restore selection of last wallpaper after library is loaded."""
+        if self.config:
+            last_wp = self.config.get_setting("last_wallpaper")
+            if last_wp:
+                # Select by URL/path stored in data
+                self.lib_page.grid.select_wallpaper(last_wp)
+                # Trigger selection to update UI
+                self.on_selection_changed(None, None)
 
     def _on_wallpaper_loaded(self, name, w_type, thumb, path):
         self.lib_page.grid.add_wallpaper(name, w_type, thumbnail_path=thumb, data=path)
@@ -438,12 +490,14 @@ class MainWindow(QMainWindow):
         )
 
         if res == QMessageBox.Yes:
+            removed_urls = []
             for row in unique_rows:
                 item = self.lib_page.grid.model.item(row)
                 if not item:
                     continue
 
                 path = item.data(Qt.UserRole + 2)
+                removed_urls.append(path)
 
                 # Intentar borrar el archivo físico si es local
                 if path and os.path.exists(path) and os.path.isfile(path):
@@ -454,6 +508,30 @@ class MainWindow(QMainWindow):
                         logging.error(f"No se pudo eliminar el archivo {path}: {e}")
 
                 self.lib_page.grid.model.removeRow(row)
+
+            # Eliminar de la configuración los wallpapers remotos y last_wallpaper
+            if self.config and removed_urls:
+                remote_list = self.config.get_setting("remote_wallpapers", [])
+                if remote_list:
+                    # Filtrar y mantener solo los que no fueron eliminados
+                    new_remote_list = []
+                    for entry in remote_list:
+                        url = entry.get("url") if isinstance(entry, dict) else entry
+                        if url not in removed_urls:
+                            new_remote_list.append(entry)
+
+                    # Solo actualizar si hubo cambios
+                    if len(new_remote_list) != len(remote_list):
+                        self.config.set_setting("remote_wallpapers", new_remote_list)
+                        logging.info(
+                            f"Eliminados {len(remote_list) - len(new_remote_list)} wallpapers remotos de la configuración"
+                        )
+
+                # Si el wallpaper eliminado es el last_wallpaper, limpiar esa configuración
+                last_wp = self.config.get_setting("last_wallpaper")
+                if last_wp and last_wp in removed_urls:
+                    self.config.set_setting("last_wallpaper", None)
+                    logging.info("last_wallpaper limpiado de la configuración")
 
             # Limpiar selección y refrescar interfaz
             self.lib_page.grid.clearSelection()
@@ -513,6 +591,44 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             data = dialog.result_data
             if data:
-                self.lib_page.grid.add_wallpaper(
-                    data["name"], data["type"], data=data["url"]
-                )
+                url = data["url"]
+                name = data["name"]
+                w_type = data["type"]
+
+                # Persist remote wallpaper in config
+                if self.config:
+                    remote_list = self.config.get_setting("remote_wallpapers", [])
+                    # Avoid duplicates
+                    existing_urls = [
+                        e.get("url") if isinstance(e, dict) else e for e in remote_list
+                    ]
+                    if url not in existing_urls:
+                        remote_list.append({"name": name, "url": url, "type": w_type})
+                        self.config.set_setting("remote_wallpapers", remote_list)
+
+                # Add wallpaper with placeholder thumbnail
+                self.lib_page.grid.add_wallpaper(name, w_type, data=url)
+
+                # Start background thumbnail loading
+                if self.resources:
+                    self.thumb_loader = ThumbnailLoaderWorker(self.resources, url)
+                    self.thumb_loader.thumbnailReady.connect(self._on_thumbnail_ready)
+                    self.thumb_loader.start()
+
+                # Automatically select and apply the newly added wallpaper
+                self.lib_page.grid.select_wallpaper(url)
+                # Trigger selection change to apply wallpaper
+                self.on_selection_changed(None, None)
+
+    def _on_thumbnail_ready(self, url, thumbnail_path):
+        """Update wallpaper thumbnail when background loading completes."""
+        self.lib_page.grid.update_thumbnail(url, thumbnail_path)
+        # Refresh selection if this is the currently selected wallpaper
+        selected_indexes = self.lib_page.grid.selectionModel().selectedIndexes()
+        for idx in selected_indexes:
+            item = self.lib_page.grid.model.itemFromIndex(idx)
+            if item and item.data(Qt.UserRole + 2) == url:
+                # Update preview in properties panel
+                pixmap = item.icon().pixmap(290, 165)
+                self.props_panel.preview_box.setPixmap(pixmap)
+                break

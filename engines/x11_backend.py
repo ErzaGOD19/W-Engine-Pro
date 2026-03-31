@@ -38,6 +38,7 @@ class X11Backend(BaseBackend):
         time.sleep(STARTUP_DELAY)
 
         from core.desktop_helper import DesktopHelper
+
         DesktopHelper.set_static_blur_background(video_path)
 
         layout_mode = config.get_setting("layout_mode", "Individual")
@@ -67,7 +68,9 @@ class X11Backend(BaseBackend):
             self.proc_manager.start(proc_id, full_cmd, env=env)
             self.active_sockets.append(socket_path)
 
-        success = wait_for_ipc(self.active_sockets, IPC_WAIT_ATTEMPTS, IPC_POLL_INTERVAL)
+        success = wait_for_ipc(
+            self.active_sockets, IPC_WAIT_ATTEMPTS, IPC_POLL_INTERVAL
+        )
         self._refresh_xfce_if_needed()
         return success
 
@@ -99,15 +102,23 @@ class X11Backend(BaseBackend):
             display = Display()
             root = display.screen().root
 
-            net_wm_window_type = display.intern_atom("_NET_WM_WINDOW_TYPE", only_if_exists=True)
-            net_wm_desktop = display.intern_atom("_NET_WM_WINDOW_TYPE_DESKTOP", only_if_exists=True)
+            net_wm_window_type = display.intern_atom(
+                "_NET_WM_WINDOW_TYPE", only_if_exists=True
+            )
+            net_wm_desktop = display.intern_atom(
+                "_NET_WM_WINDOW_TYPE_DESKTOP", only_if_exists=True
+            )
 
             if not (net_wm_window_type and net_wm_desktop):
                 return None
 
-            found = self._bfs_find_desktop_window(root, net_wm_window_type, net_wm_desktop)
+            found = self._bfs_find_desktop_window(
+                root, net_wm_window_type, net_wm_desktop
+            )
             if found:
-                logging.info(f"[X11Backend] Desktop window WID from python-xlib: {found}")
+                logging.info(
+                    f"[X11Backend] Desktop window WID from python-xlib: {found}"
+                )
             return found
 
         except Exception:
@@ -147,7 +158,9 @@ class X11Backend(BaseBackend):
 
             if match:
                 wid = int(match.group(1), 16)
-                logging.info(f"[X11Backend] Root WID from xwininfo: {match.group(1)} -> {wid}")
+                logging.info(
+                    f"[X11Backend] Root WID from xwininfo: {match.group(1)} -> {wid}"
+                )
                 return wid
 
         except FileNotFoundError:
@@ -215,11 +228,19 @@ class X11Backend(BaseBackend):
                 value = gamma_ui_to_mpv(value)
 
             logging.debug(f"[X11Backend] set_property: {mpv_prop}={value}")
-            return send_ipc_command(self.active_sockets, "set_property", mpv_prop, value, timeout=SOCKET_TIMEOUT)
+            return send_ipc_command(
+                self.active_sockets,
+                "set_property",
+                mpv_prop,
+                value,
+                timeout=SOCKET_TIMEOUT,
+            )
 
         if key == "loop":
             if value == "Loop":
-                send_ipc_command(self.active_sockets, "set_property", "loop-file", "inf")
+                send_ipc_command(
+                    self.active_sockets, "set_property", "loop-file", "inf"
+                )
                 send_ipc_command(self.active_sockets, "set_property", "pause", False)
             else:
                 send_ipc_command(self.active_sockets, "set_property", "loop-file", "no")
@@ -232,10 +253,15 @@ class X11Backend(BaseBackend):
         return False
 
     def send_command(self, command, *args):
-        return send_ipc_command(self.active_sockets, command, *args, timeout=SOCKET_TIMEOUT)
+        return send_ipc_command(
+            self.active_sockets, command, *args, timeout=SOCKET_TIMEOUT
+        )
 
     def _build_mpv_args(self, config, socket_path):
-        args = build_common_mpv_args(config, socket_path, wid_needed=True)
+        video_path = config.get_setting("last_wallpaper", None)
+        args = build_common_mpv_args(
+            config, socket_path, wid_needed=True, video_path=video_path
+        )
         args.append("--audio-fallback-to-null=yes")
         args.append("--force-window=yes")
 
@@ -284,7 +310,12 @@ class X11Backend(BaseBackend):
             )
 
         if match:
-            return [(match.group(2), match.group(1) if target_monitor == "Auto" else target_monitor)]
+            return [
+                (
+                    match.group(2),
+                    match.group(1) if target_monitor == "Auto" else target_monitor,
+                )
+            ]
         return []
 
     def _update_fit(self, value):

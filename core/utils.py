@@ -42,7 +42,7 @@ def gamma_ui_to_mpv(gamma_ui):
         return 0
 
 
-def build_common_mpv_args(config, socket_path, wid_needed=False):
+def build_common_mpv_args(config, socket_path, wid_needed=False, video_path=None):
     """Build the common set of mpv arguments used by all backends."""
     args = []
 
@@ -53,6 +53,12 @@ def build_common_mpv_args(config, socket_path, wid_needed=False):
     # Do not assume audio is muted by default; prefer stored user config (default False).
     mute_value = config.get_setting("mute", False)
     logging.info(f"[build_common_mpv_args] mute config value: {mute_value}")
+
+    # Check if video path is a YouTube URL to enable ytdl
+    is_youtube = False
+    if video_path and isinstance(video_path, str):
+        is_youtube = "youtube.com" in video_path or "youtu.be" in video_path
+
     args.extend(
         [
             f"--loop-file={loop}",
@@ -71,6 +77,11 @@ def build_common_mpv_args(config, socket_path, wid_needed=False):
             "--idle",
         ]
     )
+
+    # Enable yt-dlp for YouTube URLs
+    if is_youtube:
+        args.append("--ytdl")
+        logging.info("[build_common_mpv_args] YouTube support enabled (yt-dlp)")
 
     # Note: We don't use --no-audio here because we want to be able to toggle
     # mute dynamically via IPC. Instead, we use --mute=yes/no which can be changed.

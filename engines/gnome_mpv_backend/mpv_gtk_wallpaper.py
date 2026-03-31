@@ -1,25 +1,27 @@
 #!/usr/bin/env python3
-import sys
-import os
-import logging
+import ctypes
 import json
+import logging
+import os
 import socket
+import sys
 import threading
 import time
-import ctypes
 
 # Forzar X11 para el truco de incrustación
 os.environ["GDK_BACKEND"] = "x11"
 
 import gi
+
 gi.require_version("Gtk", "3.0")
 gi.require_version("Gdk", "3.0")
-from gi.repository import Gtk, Gdk, GLib
-
 import subprocess
 
-logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
+from gi.repository import Gdk, GLib, Gtk
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger("W-MPV-Integrated")
+
 
 class WallpaperWindow(Gtk.Window):
     def __init__(self, monitor_idx, rect, video_path, socket_path, resolution="Nativa"):
@@ -52,7 +54,10 @@ class WallpaperWindow(Gtk.Window):
         # Obtener el ID de la ventana de X11
         window = self.get_window()
         xid = window.get_xid()
-        
+
+        # Check if video path is a YouTube URL to enable ytdl
+        is_youtube = "youtube.com" in self.video_path or "youtu.be" in self.video_path
+
         # Lanzar MPV incrustado en esta ventana
         cmd = [
             "mpv",
@@ -64,8 +69,13 @@ class WallpaperWindow(Gtk.Window):
             "--no-osc",
             "--no-osd-bar",
             "--no-input-default-bindings",
-            "--idle=yes"
+            "--idle=yes",
         ]
+
+        # Enable yt-dlp for YouTube URLs
+        if is_youtube:
+            cmd.append("--ytdl")
+            logger.info("[MPV Integrated] YouTube support enabled (yt-dlp)")
 
         # Aplicar resolución si no es Nativa
         resolution_map = {
@@ -77,24 +87,28 @@ class WallpaperWindow(Gtk.Window):
             cmd.append(f"--vf={resolution_map[self.resolution]}")
 
         cmd.append(self.video_path)
-        
+
         # Limpiar entorno para que MPV use las del sistema
         env = os.environ.copy()
         for var in ["PYTHONPATH", "PYTHONHOME", "LD_LIBRARY_PATH"]:
-            if var in env: del env[var]
-            
-        logger.info(f"Starting MPV embedded in XID: {xid} with resolution: {self.resolution}")
+            if var in env:
+                del env[var]
+
+        logger.info(
+            f"Starting MPV embedded in XID: {xid} with resolution: {self.resolution}"
+        )
         self.mpv_proc = subprocess.Popen(cmd, env=env)
 
     def on_destroy(self, *args):
         if self.mpv_proc:
             self.mpv_proc.terminate()
 
+
 class WallpaperManager(Gtk.Application):
     def __init__(self, video_path, socket_path, resolution="Nativa"):
         super(WallpaperManager, self).__init__(
             application_id=f"org.wengine.mpv_integrated.p{os.getpid()}",
-            flags=gi.repository.Gio.ApplicationFlags.NON_UNIQUE
+            flags=gi.repository.Gio.ApplicationFlags.NON_UNIQUE,
         )
         self.video_path = video_path
         self.socket_path = socket_path
@@ -103,12 +117,15 @@ class WallpaperManager(Gtk.Application):
     def do_activate(self):
         display = Gdk.Display.get_default()
         n_monitors = display.get_n_monitors()
-        
+
         # Native integrated engine window
         monitor = display.get_monitor(0)
         rect = monitor.get_geometry()
-        win = WallpaperWindow(0, rect, self.video_path, self.socket_path, self.resolution)
+        win = WallpaperWindow(
+            0, rect, self.video_path, self.socket_path, self.resolution
+        )
         self.add_window(win)
+
 
 if __name__ == "__main__":
     path = sys.argv[1]

@@ -1,0 +1,61 @@
+{
+    "app-id": "com.wengine.pro",
+    "runtime": "org.freedesktop.Platform",
+    "runtime-version": "22.08",
+    "sdk": "org.freedesktop.Sdk",
+    "command": "W-Engine-Pro",
+    "finish-args": [
+        "--share=network",
+        "--socket=x11",
+        "--socket=wayland",
+        "--socket=pulseaudio",
+        "--filesystem=home",
+        "--device=dri"
+    ],
+    "modules": [
+        {
+            "name": "W-Engine-Pro",
+            "buildsystem": "simple",
+            "build-commands": [
+                "install -D dist/W-Engine-Pro/W-Engine-Pro /app/bin/W-Engine-Pro",
+                "install -D -t /app/data data/*"
+            ],
+            "sources": [
+                {
+                    "type": "file",
+                    "path": "dist/W-Engine-Pro/W-Engine-Pro"
+                },
+                {
+                    "type": "dir",
+                    "path": "data"
+                }
+            ]
+        },
+        {
+            "name": "mpv",
+            "buildsystem": "meson",
+            "config-opts": [
+                "-Dlua=disabled",
+                "-Dlibmpv=true"
+            ],
+            "sources": [
+                {
+                    "type": "git",
+                    "url": "https://github.com/mpv-player/mpv.git",
+                    "branch": "master"
+                }
+            ]
+        },
+        {
+            "name": "mpvpaper",
+            "buildsystem": "meson",
+            "sources": [
+                {
+                    "type": "git",
+                    "url": "https://github.com/GhostNaN/mpvpaper.git",
+                    "branch": "master"
+                }
+            ]
+        }
+    ]
+}

@@ -1,21 +1,23 @@
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QCheckBox,
-    QLabel,
-    QComboBox,
-    QGroupBox,
-    QFormLayout,
-    QScrollArea,
-    QFrame,
-    QPushButton,
-    QMessageBox,
-    QTabWidget,
-)
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QFormLayout,
+    QFrame,
+    QGroupBox,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
+)
+
+from core import i18n
 from core.desktop_helper import DesktopHelper
 from ui.customization_section import CustomizationSection
-from core import i18n
+
 
 class SettingsPanel(QWidget):
     def __init__(self, config, controller):
@@ -42,10 +44,12 @@ class SettingsPanel(QWidget):
         engine_group_layout = QFormLayout()
 
         self.engine_combo = QComboBox()
-        self.engine_combo.addItems(["mpv", "web", "parallax"])
+        self.engine_combo.addItems(["mpv"])
         self.engine_combo.setCurrentText(self.config.get("engine", "mpv"))
         self.engine_combo.currentTextChanged.connect(self._on_engine_changed)
-        engine_group_layout.addRow(QLabel(i18n.t("engine_settings") + ":"), self.engine_combo)
+        engine_group_layout.addRow(
+            QLabel(i18n.t("engine_settings") + ":"), self.engine_combo
+        )
 
         self.hwdec_combo = QComboBox()
         self.hwdec_combo.addItems(["auto", "vaapi", "nvdec", "none"])
@@ -53,7 +57,9 @@ class SettingsPanel(QWidget):
         self.hwdec_combo.currentTextChanged.connect(
             lambda v: self.config.set("hwdec", v)
         )
-        engine_group_layout.addRow(QLabel(i18n.t("hardware_decoding") + ":"), self.hwdec_combo)
+        engine_group_layout.addRow(
+            QLabel(i18n.t("hardware_decoding") + ":"), self.hwdec_combo
+        )
 
         self.playback_mode_combo = QComboBox()
         self.playback_mode_combo.addItems(
@@ -66,7 +72,9 @@ class SettingsPanel(QWidget):
         self.playback_mode_combo.setToolTip(
             "Auto: Decide based on RAM and file size.\nDisk: Read directly (minimal RAM usage).\nMemory: Cache video in RAM for maximum smoothness."
         )
-        engine_group_layout.addRow(QLabel(i18n.t("playback_mode") + ":"), self.playback_mode_combo)
+        engine_group_layout.addRow(
+            QLabel(i18n.t("playback_mode") + ":"), self.playback_mode_combo
+        )
 
         engine_group.setLayout(engine_group_layout)
         engine_layout.addWidget(engine_group)
@@ -105,10 +113,20 @@ class SettingsPanel(QWidget):
         self.auto_start_cb.stateChanged.connect(self._on_autostart_changed)
         behavior_layout.addRow(self.auto_start_cb)
 
+        self.start_minimized_cb = QCheckBox("Start minimized (system tray only)")
+        self.start_minimized_cb.setChecked(self.config.get("start_minimized", False))
+        self.start_minimized_cb.stateChanged.connect(self._on_start_minimized_changed)
+        behavior_layout.addRow(self.start_minimized_cb)
+
         # Smart Pause Options
         self.pause_mode_combo = QComboBox()
         self.pause_mode_combo.addItems(
-            [i18n.t("disabled"), i18n.t("pause_window"), i18n.t("pause_maximized"), i18n.t("pause_fullscreen")]
+            [
+                i18n.t("disabled"),
+                i18n.t("pause_window"),
+                i18n.t("pause_maximized"),
+                i18n.t("pause_fullscreen"),
+            ]
         )
 
         # Sync with config
@@ -128,7 +146,9 @@ class SettingsPanel(QWidget):
             )
 
         self.pause_mode_combo.currentTextChanged.connect(self._on_pause_mode_changed)
-        behavior_layout.addRow(QLabel(i18n.t("playback_mode") + ":"), self.pause_mode_combo)
+        behavior_layout.addRow(
+            QLabel(i18n.t("playback_mode") + ":"), self.pause_mode_combo
+        )
 
         self.cpu_limit_combo = QComboBox()
         self.cpu_limit_combo.addItems(["50%", "70%", "85%", "95%", "Never"])
@@ -163,13 +183,22 @@ class SettingsPanel(QWidget):
         self.tabs.setTabText(0, i18n.t("engine_settings"))
         self.tabs.setTabText(1, i18n.t("interface_settings"))
         # ensure customization section also updates
-        if hasattr(self, 'customization_section'):
+        if hasattr(self, "customization_section"):
             self.customization_section._retranslate_ui()
 
     def _on_autostart_changed(self, state):
-        enabled = (state == 2)
+        enabled = state == 2
+        start_minimized = self.start_minimized_cb.isChecked()
         self.config.set("autostart", enabled)
-        DesktopHelper.setup_autostart(enabled)
+        self.config.set("start_minimized", start_minimized)
+        DesktopHelper.setup_autostart(enabled, start_minimized)
+
+    def _on_start_minimized_changed(self, state):
+        enabled = state == 2
+        autostart_enabled = self.auto_start_cb.isChecked()
+        self.config.set("start_minimized", enabled)
+        # Update autostart file with new minimized setting
+        DesktopHelper.setup_autostart(autostart_enabled, enabled)
 
     def _on_engine_changed(self, engine_name):
         self.config.set("engine", engine_name)

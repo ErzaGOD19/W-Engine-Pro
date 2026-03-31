@@ -342,9 +342,7 @@ class SettingsPage(BasePage):
         perf_form = QFormLayout(perf_group)
 
         self.engine_combo = QComboBox()
-        self.engine_combo.addItems(
-            [i18n.t("engine_mpv"), i18n.t("engine_web"), i18n.t("engine_parallax")]
-        )
+        self.engine_combo.addItems([i18n.t("engine_mpv")])
         if self.config:
             self.engine_combo.setCurrentText(self.config.get("engine", "mpv"))
             self.engine_combo.currentTextChanged.connect(
