@@ -1,18 +1,30 @@
 #!/bin/bash
+set -e
+
 HERE="$(dirname "$(readlink -f "${0}")")"
+APPDIR="$HERE"
 
-# 1. Configurar Rutas de Librerías (Fundamental para mpv y plugins)
-export LD_LIBRARY_PATH="$HERE/usr/lib:$LD_LIBRARY_PATH"
+export LD_LIBRARY_PATH="$APPDIR/usr/lib:$APPDIR/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
 
-# 2. Configurar Python Bundled
-export PYTHONHOME="$HERE/usr"
-export PYTHONPATH="$HERE/usr/share/wengine:$HERE/usr/lib/python3.12/site-packages:$PYTHONPATH"
+PYTHON_DIR=$(ls -d "$APPDIR/usr/lib/python3."* 2>/dev/null | head -1)
+if [ -n "$PYTHON_DIR" ]; then
+    export PYTHONHOME="$APPDIR/usr"
+    export PYTHONPATH="$APPDIR/usr/share/wengine:$PYTHON_DIR/site-packages:$PYTHONPATH"
+fi
 
-# 3. Configurar Qt de PySide6 (Esto asegura que use el Qt de PySide6)
-PYSIDE_QT="$HERE/usr/lib/python3.12/site-packages/PySide6/Qt"
-export QT_PLUGIN_PATH="$PYSIDE_QT/plugins"
-export QML2_IMPORT_PATH="$PYSIDE_QT/qml"
-export QT_QPA_PLATFORM_PLUGIN_PATH="$PYSIDE_QT/plugins/platforms"
+PYSIDE_QT=$(find "$APPDIR/usr/lib" -type d -name "Qt" 2>/dev/null | head -1)
+if [ -n "$PYSIDE_QT" ]; then
+    export QT_PLUGIN_PATH="$PYSIDE_QT/plugins:$QT_PLUGIN_PATH"
+    export QT_QPA_PLATFORM_PLUGIN_PATH="$PYSIDE_QT/plugins/platforms:$QT_QPA_PLATFORM_PLUGIN_PATH"
+    export QML2_IMPORT_PATH="$PYSIDE_QT/qml:$QML2_IMPORT_PATH"
+fi
 
-# 4. Lanzar la aplicación usando el Python interno
-exec "$HERE/usr/bin/python3" "$HERE/usr/share/wengine/main.py" "$@"
+if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
+    export QT_QPA_PLATFORM="wayland;xcb"
+else
+    export QT_QPA_PLATFORM="xcb"
+fi
+
+export PATH="$APPDIR/usr/bin:$PATH"
+
+exec "$APPDIR/usr/bin/wengine" "$@"

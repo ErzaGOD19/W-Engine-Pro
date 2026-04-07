@@ -1,11 +1,14 @@
-from core.renderer_manager import RendererManager
-from core.event_bus import EventBus
-from core.activity_monitor import ActivityMonitor
-from core.health_monitor import HealthMonitor
-from PySide6.QtGui import QGuiApplication
-from PySide6.QtCore import QObject, Slot, QThread, QTimer
-from typing import Any
 import logging
+import os
+from typing import Any
+
+from PySide6.QtCore import QObject, QThread, QTimer, Slot
+from PySide6.QtGui import QGuiApplication
+
+from core.activity_monitor import ActivityMonitor
+from core.event_bus import EventBus
+from core.health_monitor import HealthMonitor
+from core.renderer_manager import RendererManager
 
 
 class EngineController(QObject):
@@ -59,9 +62,13 @@ class EngineController(QObject):
 
     @Slot(str, Any)
     def _on_event(self, event_name, data):
+        logging.info(f"[EngineController] Received event: {event_name} - {data}")
         if event_name == "config_changed":
             key = data.get("key")
             value = data.get("value")
+            logging.info(
+                f"[EngineController] Processing config_changed: key={key}, value={value}"
+            )
             self._apply_config_change(key, value)
 
     def _apply_config_change(self, key, value):
@@ -70,9 +77,27 @@ class EngineController(QObject):
         )
         logging.debug(f"Applying config change: {key} = {value}")
 
+        # Mute requires restart because --no-audio cannot be changed dynamically via IPC
+        if key == "mute":
+            logging.info(f"[CONTROLLER_DEBUG] Mute change requires restart")
+            if self.active_wallpapers:
+                self.health_monitor.trigger_grace_period(10.0)
+                current_activity_pause = getattr(
+                    self.activity_monitor, "_last_pause_state", False
+                )
+                current_pause_state = self.is_paused or current_activity_pause
+                self.health_monitor.set_paused(current_pause_state)
+                for monitor_id, video_path in list(self.active_wallpapers.items()):
+                    logging.info(
+                        f"[CONTROLLER_DEBUG] Restarting renderer for mute change"
+                    )
+                    self.renderer.restart(
+                        self.config, video_path, initial_pause=current_pause_state
+                    )
+            return
+
         dynamic_keys = [
             "volume",
-            "mute",
             "loop",
             "fit",
             "brightness",
@@ -82,7 +107,11 @@ class EngineController(QObject):
             "pause_mode",
         ]
         if key in dynamic_keys:
-            self.renderer.update_setting(key, value)
+            logging.info(
+                f"[CONTROLLER_DEBUG] Calling renderer.update_setting({key}, {value})"
+            )
+            result = self.renderer.update_setting(key, value)
+            logging.info(f"[CONTROLLER_DEBUG] renderer.update_setting result: {result}")
             return
 
         if key == "playback_mode":
@@ -107,19 +136,15 @@ class EngineController(QObject):
             if self.active_wallpapers:
                 logging.info(f"Restarting all renderers due to config: {key}")
 
-                # IMPORTANT: Use grace period to avoid health monitor race conditions
                 self.health_monitor.trigger_grace_period(10.0)
 
-                # Check current pause state (from activity monitor AND manual toggle)
                 current_activity_pause = getattr(
                     self.activity_monitor, "_last_pause_state", False
                 )
                 current_pause_state = self.is_paused or current_activity_pause
 
-                # Sync health monitor state
                 self.health_monitor.set_paused(current_pause_state)
 
-                # Restart all active monitors with their respective wallpapers
                 for monitor_id, video_path in list(self.active_wallpapers.items()):
                     self.renderer.restart(
                         self.config, video_path, initial_pause=current_pause_state
@@ -172,6 +197,7 @@ class EngineController(QObject):
             self.config.set_setting("last_wallpaper", video_path)
 
         self.active_wallpapers[monitor_id] = video_path
+        self.health_monitor.trigger_grace_period(20.0)
         self.renderer.restart(self.config, video_path)
 
     def shutdown(self):
@@ -188,10 +214,10 @@ class EngineController(QObject):
 
     def get_diagnostics(self) -> dict:
         """Collects all real-time engine and system status for the UI."""
-        import psutil
         import time
 
-        # Cache battery and cpu for performance if called too frequently
+        import psutil
+
         now = time.time()
         if not hasattr(self, "_diag_cache"):
             self._diag_cache = {"last_update": 0, "battery": None, "cpu_percent": 0}
@@ -206,14 +232,20 @@ class EngineController(QObject):
 
         # Check IPC status for all active sockets
         active_sockets = self.renderer.get_active_sockets()
-        ipc_ok = True
+        ipc_ok = False
         if active_sockets:
             for s in active_sockets:
-                if not self.health_monitor._check_ipc(s):
-                    ipc_ok = False
+                try:
+                    if os.path.exists(s) and self.health_monitor._check_ipc(s):
+                        ipc_ok = True
+                        break
+                    else:
+                        logging.debug(f"[Diagnostics] IPC check failed for {s}")
+                except Exception as e:
+                    logging.debug(f"[Diagnostics] IPC check error: {e}")
                     break
         else:
-            ipc_ok = False
+            logging.debug("[Diagnostics] No active sockets found")
 
         return {
             "backend": self.renderer.backend.__class__.__name__,

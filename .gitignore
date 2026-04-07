@@ -212,3 +212,11 @@ build-dir/
 
 # Qwen Code
 .qwen/
+
+# W-Engine packaging
+packaging/AppDir/usr/
+packaging/AppDir/.DirIcon
+dist/*.AppImage
+dist/build/
+dist/pyinstaller/
+squashfs-root/

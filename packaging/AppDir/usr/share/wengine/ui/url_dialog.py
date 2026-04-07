@@ -1,15 +1,16 @@
-from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QFormLayout,
-    QLineEdit,
-    QComboBox,
-    QPushButton,
-    QLabel,
-    QHBoxLayout,
-    QMessageBox,
-)
 import re
+
+from PySide6.QtWidgets import (
+    QComboBox,
+    QDialog,
+    QFormLayout,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+)
 
 
 class UrlDialog(QDialog):
@@ -24,7 +25,9 @@ class UrlDialog(QDialog):
         form = QFormLayout()
 
         self.url_input = QLineEdit()
-        self.url_input.setPlaceholderText("https://example.com/video.mp4")
+        self.url_input.setPlaceholderText(
+            "https://example.com/video.mp4 or https://youtube.com/watch?v=..."
+        )
         self.url_input.textChanged.connect(self.detect_type)
         form.addRow("URL:", self.url_input)
 
@@ -55,6 +58,42 @@ class UrlDialog(QDialog):
         btn_layout.addWidget(self.add_btn)
         layout.addLayout(btn_layout)
 
+    @staticmethod
+    def normalize_youtube_url(url):
+        """Normalize YouTube URLs to a consistent format."""
+        # Handle youtu.be short URLs
+        short_match = re.match(r"https?://youtu\.be/([a-zA-Z0-9_-]+)", url)
+        if short_match:
+            video_id = short_match.group(1)
+            return f"https://www.youtube.com/watch?v={video_id}"
+
+        # Handle youtube.com/watch?v= URLs
+        watch_match = re.match(
+            r"https?://(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]+)", url
+        )
+        if watch_match:
+            video_id = watch_match.group(1)
+            return f"https://www.youtube.com/watch?v={video_id}"
+
+        # Handle youtube.com/embed/ URLs
+        embed_match = re.match(
+            r"https?://(?:www\.)?youtube\.com/embed/([a-zA-Z0-9_-]+)", url
+        )
+        if embed_match:
+            video_id = embed_match.group(1)
+            return f"https://www.youtube.com/watch?v={video_id}"
+
+        # Handle youtube.com/shorts/ URLs
+        shorts_match = re.match(
+            r"https?://(?:www\.)?youtube\.com/shorts/([a-zA-Z0-9_-]+)", url
+        )
+        if shorts_match:
+            video_id = shorts_match.group(1)
+            return f"https://www.youtube.com/watch?v={video_id}"
+
+        # Return original if no match
+        return url
+
     def detect_type(self):
         url = self.url_input.text().strip()
         if not url:
@@ -75,7 +114,11 @@ class UrlDialog(QDialog):
             self.preview_label.setText(f"Detected Type: {w_type}")
 
         if not self.name_input.text():
-            self.name_input.setText(url.split("/")[-1])
+            # Better name extraction
+            if "youtube.com" in url or "youtu.be" in url:
+                self.name_input.setText("YouTube Video")
+            else:
+                self.name_input.setText(url.split("/")[-1])
 
     def validate_and_accept(self):
         url = self.url_input.text().strip()
@@ -84,6 +127,10 @@ class UrlDialog(QDialog):
         if not url:
             QMessageBox.warning(self, "Error", "Please enter a valid URL.")
             return
+
+        # Normalize YouTube URLs
+        if "youtube.com" in url or "youtu.be" in url:
+            url = self.normalize_youtube_url(url)
 
         w_type = self.type_combo.currentText()
         if w_type == "Auto Detect":

@@ -36,7 +36,7 @@ class BackgroundManager:
                 client.connect(SOCKET_PATH)
                 client.sendall((json.dumps({"command": command}) + "\n").encode())
             return True
-        except:
+        except (OSError, ConnectionRefusedError, json.JSONDecodeError):
             return False
 
     def get_window_info(self):
@@ -56,7 +56,7 @@ class BackgroundManager:
             is_fs = state and self.FULLSCREEN in state.value
 
             return is_desktop, is_fs
-        except:
+        except (X.error, AttributeError, IndexError):
             return True, False
 
     def manage_bg(self, is_desktop, is_fs):
@@ -89,13 +89,6 @@ class BackgroundManager:
             .strip()
         )
         cmd = [
-            "xwinwrap",
-            "-ov",
-            "-b",
-            "-ni",
-            "-fs",
-            "-nf",
-            "--",
             "mpv",
             "--wid=%WID",
             "--loop",
@@ -116,7 +109,6 @@ class BackgroundManager:
         if self.bg_proc:
             self.bg_proc.terminate()
             self.bg_proc = None
-        subprocess.run(["pkill", "-f", "xwinwrap"], stderr=subprocess.DEVNULL)
         self.state = "STOPPED"
 
     def run(self):

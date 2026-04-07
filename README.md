@@ -1,6 +1,6 @@
 # W-Engine Pro
 
-Native animated wallpaper engine for Linux. High performance (Python 3 + Qt6), low resource consumption and universal AppImage package. Automatic pause during games/fullscreen.
+Native animated wallpaper engine for Linux. High performance (Python 3 + Qt6), low resource consumption and portable AppImage package. Automatic pause during games/fullscreen.
 
 ![Screenshot 1](https://github.com/user-attachments/assets/6fa054fb-7709-4970-980a-38535e39e4d8)
 ![Screenshot 2](https://github.com/user-attachments/assets/29d0edb9-62ac-42a5-b904-aac108a557c3)
@@ -9,8 +9,8 @@ Native animated wallpaper engine for Linux. High performance (Python 3 + Qt6), l
 ## Features
 
 - Video wallpaper support (local files)
-- **Wallpaper by URL** (YouTube, Vimeo, direct video links)
-- **YouTube support** with automatic thumbnail generation
+- Wallpaper by URL (YouTube, Vimeo, direct video links)
+- YouTube support with automatic thumbnail generation
 - Real-time changes (no restart needed)
 - Dynamic UI with Qt6
 - Reactive engine (event-driven)
@@ -18,29 +18,26 @@ Native animated wallpaper engine for Linux. High performance (Python 3 + Qt6), l
 - Multi-monitor support
 - CPU/GPU optimization
 - Automatic pause on activity
-- **Start minimized to system tray**
-- **Autostart on system login**
+- Start minimized to system tray
+- Autostart on system login
 
-## Compatibility
+## Installation
 
-| Environment | Status |
-|-------------|--------|
-| KDE Plasma (X11) | Stable |
-| XFCE | Stable |
-| GNOME (X11) | Partial |
-| GNOME (Wayland) | Experimental |
-| Cinnamon | Stable |
-| Other Wayland | Experimental |
+### AppImage (Recommended)
 
-## Requirements
-
-### Python
+Download the AppImage from releases:
 ```bash
-pip install PySide6 psutil python-xlib Pillow
+chmod +x W-Engine-Pro-1.0.0-x86_64.AppImage
+./W-Engine-Pro-1.0.0-x86_64.AppImage
 ```
 
-### System
+### Build from source
+
 ```bash
+# Install dependencies
+pip install PySide6 psutil Pillow
+
+# Install system dependencies
 # Arch Linux
 sudo pacman -S mpv xorg-xwininfo xorg-xrandr yt-dlp
 
@@ -51,8 +48,14 @@ sudo apt install mpv x11-utils xrandr yt-dlp
 sudo dnf install mpv xorg-x11-utils xrandr yt-dlp
 ```
 
-> **Note:** `Pillow` is optional (only for static blur effect).  
-> **Note:** `yt-dlp` is required for YouTube URL support.
+### Build AppImage
+
+```bash
+cd packaging
+./build.sh rebuild
+```
+
+Output: `dist/W-Engine-Pro-1.0.0-x86_64.AppImage`
 
 ## Usage
 
@@ -64,22 +67,23 @@ python main.py --minimized        # Start minimized to system tray
 
 ### Autostart Configuration
 
-To enable autostart with minimized option:
-
 1. Open W-Engine Pro
-2. Go to **Settings** → **Engine**
-3. Check **"Start with system"**
-4. Check **"Start minimized (system tray only)"** (optional)
-5. Settings are saved automatically
+2. Go to Settings -> Engine
+3. Check "Start with system"
+4. Check "Start minimized" (optional)
 
-This creates `~/.config/autostart/wengine-pro.desktop` with the appropriate flags.
+This creates ~/.config/autostart/wengine-pro.desktop
 
-**Supported installation types:**
-- **Flatpak**: `flatpak run org.wengine.Pro --autostart`
-- **AppImage**: `/path/to/W-Engine-Pro.AppImage --autostart`
-- **Python**: `python /path/to/main.py --autostart`
+## Compatibility
 
-The autostart command is automatically detected based on how you're running the application.
+| Environment | Status |
+|-------------|--------|
+| KDE Plasma (X11) | Stable |
+| XFCE | Stable |
+| GNOME (X11) | Partial |
+| GNOME (Wayland) | Experimental |
+| Cinnamon | Stable |
+| Other Wayland | Experimental |
 
 ## Architecture
 
@@ -109,6 +113,11 @@ ui/                     # Qt6 Interface
   settings_panel.py     # Settings panel
 
 threads/                # Worker threads
+
+packaging/              # Build scripts
+  build.sh              # Build AppImage
+  wengine.spec          # PyInstaller spec
+  AppRun                # AppImage runtime
 ```
 
 ## License

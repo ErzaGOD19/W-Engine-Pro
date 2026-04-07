@@ -1,14 +1,16 @@
-import sys
 import logging
 import os
-from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
-from PySide6.QtGui import QIcon, QAction
-from PySide6.QtCore import Qt, QSize
-from ui.main_window import MainWindow
+import sys
+
+from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
+
 from core.config_manager import ConfigManager
+from core.desktop_helper import DesktopHelper
 from core.engine_controller import EngineController
 from core.resource_manager import ResourceManager
-from core.desktop_helper import DesktopHelper
+from ui.main_window import MainWindow
 
 
 def main():
@@ -47,7 +49,10 @@ def main():
     config = ConfigManager()
 
     # Gestionar Autostart según configuración
-    DesktopHelper.setup_autostart(config.get_setting("autostart", False))
+    DesktopHelper.setup_autostart(
+        config.get_setting("autostart", False),
+        config.get_setting("start_minimized", False),
+    )
 
     resources = ResourceManager(config)
     controller = EngineController(config_manager=config)
@@ -57,16 +62,26 @@ def main():
         window = MainWindow(controller=controller, config=config, resources=resources)
         window.setWindowIcon(app_icon)
 
+        # Check if should start minimized
+        start_minimized_flag = "--minimized" in sys.argv
+        start_minimized_config = config.get_setting("start_minimized", False)
+        should_start_minimized = start_minimized_flag or start_minimized_config
+
         tray_icon = QSystemTrayIcon(app_icon, app)
         tray_menu = QMenu()
 
-        show_action = QAction("Mostrar Interfaz", app)
+        def update_tray_menu_style():
+            tray_menu.setStyleSheet(app.styleSheet())
+
+        window.theme_changed.connect(update_tray_menu_style)
+
+        show_action = QAction("Show Interface", app)
         show_action.triggered.connect(window.showNormal)
 
-        pause_action = QAction("Pausar/Reanudar", app)
+        pause_action = QAction("Pause/Resume", app)
         pause_action.triggered.connect(lambda: controller.pause_all())
 
-        quit_action = QAction("Salir", app)
+        quit_action = QAction("Exit", app)
         quit_action.triggered.connect(app.quit)
 
         tray_menu.addAction(show_action)
@@ -77,16 +92,39 @@ def main():
         tray_icon.setContextMenu(tray_menu)
         tray_icon.show()
 
-        window.show()
+        # Show window normally or hide if start minimized
+        if should_start_minimized:
+            logging.info("[Main] Starting minimized (system tray only)")
+            # Don't call window.show() - keep it hidden
+        else:
+            window.show()
 
-        controller.start_all(default_engine="mpv")
+        # FORCE START IMMEDIATELY FOR DEBUGGING
+        last_wp = config.get_setting("last_wallpaper")
+        if last_wp:
+            logging.info(f"[DEBUG] Forcing start with: {last_wp}")
+            controller.set_wallpaper_for_monitor(0, last_wp)
 
         exit_code = app.exec()
 
+    except KeyboardInterrupt:
+        logging.info("Received KeyboardInterrupt, shutting down...")
     except Exception as e:
         logging.error(f"CRITICAL UI ERROR: {e}")
         exit_code = 1
     finally:
+        # Ensure configuration is flushed to disk before shutting down controllers.
+        # This forces any pending playback/settings to be persisted.
+        try:
+            if config:
+                # Prefer calling the internal save routine to guarantee immediate write.
+                # Fallback to a generic 'save' if present.
+                if hasattr(config, "_save") and callable(getattr(config, "_save")):
+                    config._save()
+                elif hasattr(config, "save") and callable(getattr(config, "save")):
+                    config.save()
+        except Exception as e:
+            logging.error(f"Error saving config on shutdown: {e}")
         controller.shutdown()
 
     sys.exit(exit_code)

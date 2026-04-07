@@ -12,11 +12,11 @@ class EngineLoader:
         """
         Carga e instancia un motor por su nombre.
 
-        :param engine_name: El nombre del motor (ej: "mpv", "web"). Coincide con el nombre de la carpeta.
+        :param engine_name: El nombre del motor (ej: "mpv"). Coincide con el nombre de la carpeta.
         :param config: Instancia de ConfigManager.
         :param surface_manager: Instancia de SurfaceManager para el motor.
         :param monitor_id: ID del monitor.
-        :return: Una instancia del motor o None si falla.
+        :return: Una instancia del motor o None si falla. Los motores "web" y "parallax" ya no están soportados.
         """
         try:
             if engine_name == "mpv":

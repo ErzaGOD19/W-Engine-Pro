@@ -1,6 +1,6 @@
-from PySide6.QtWidgets import QListView, QAbstractItemView
-from PySide6.QtGui import QStandardItemModel, QStandardItem, QIcon, QPixmap, QColor
 from PySide6.QtCore import QSize, Qt
+from PySide6.QtGui import QColor, QIcon, QPixmap, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import QAbstractItemView, QListView
 
 
 class WallpaperGrid(QListView):
@@ -52,6 +52,60 @@ class WallpaperGrid(QListView):
             self._placeholder_pixmap = QPixmap(200, 150)
             self._placeholder_pixmap.fill(QColor("#333333"))
         item.setIcon(QIcon(self._placeholder_pixmap))
+
+    def select_wallpaper(self, identifier=None):
+        """
+        Select a wallpaper by name or by stored data (path/url).
+        identifier: matching item.text() or item.data(Qt.UserRole + 2)
+        """
+        from PySide6.QtCore import QItemSelectionModel
+
+        for row in range(self.model.rowCount()):
+            item = self.model.item(row)
+            if not item:
+                continue
+            item_data = item.data(Qt.UserRole + 2)
+            if (
+                identifier is None
+                or identifier == item.text()
+                or identifier == item_data
+            ):
+                index = self.model.index(row, 0)
+                # Clear previous selection and select this item
+                self.selectionModel().clearSelection()
+                self.selectionModel().select(
+                    index, QItemSelectionModel.Select | QItemSelectionModel.Rows
+                )
+                self.setCurrentIndex(index)
+                self.scrollTo(index)
+                return True
+        return False
+
+    def update_thumbnail(self, identifier, thumbnail_path):
+        """
+        Update thumbnail for an existing wallpaper item.
+        identifier: matching item.data(Qt.UserRole + 2) (URL or path)
+        """
+        from PySide6.QtGui import QIcon, QPixmap
+
+        for row in range(self.model.rowCount()):
+            item = self.model.item(row)
+            if not item:
+                continue
+            item_data = item.data(Qt.UserRole + 2)
+            if item_data == identifier:
+                pixmap = QPixmap(thumbnail_path)
+                if not pixmap.isNull():
+                    if pixmap.width() > 250 or pixmap.height() > 200:
+                        pixmap = pixmap.scaled(
+                            200,
+                            150,
+                            Qt.KeepAspectRatioByExpanding,
+                            Qt.SmoothTransformation,
+                        )
+                    item.setIcon(QIcon(pixmap))
+                return True
+        return False
 
     def clear(self):
         self.model.clear()

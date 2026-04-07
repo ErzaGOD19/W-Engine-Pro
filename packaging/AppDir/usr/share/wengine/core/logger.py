@@ -50,21 +50,20 @@ def log_event(level, message, **context):
 
 
 class MpvErrorParser:
-    """Classifies mpv stderr lines into actionable error types."""
+    """Classifies mpv/vlc stderr lines into actionable error types."""
 
     ERROR_PATTERNS = {
         "gpu_fail": [
             "vo/gpu",
-            "failed to initialize",
-            "failed to create",
-            "vulkan",
-            "opengl",
+            "vulkan error",
+            "opengl: failed to create context",
+            "failed to initialize video output",
         ],
         "file_error": ["No such file", "cannot open file", "Failed to open"],
         "codec_error": ["Failed to initialize decoder", "codec"],
         "ipc_fail": ["ipc", "connection refused", "socket error"],
-        "wayland_fail": ["wayland", "failed", "protocol error"],
-        "x11_fail": ["x11", "display error", "X11 error"],
+        "wayland_fail": ["wayland protocol error", "failed to create wayland surface"],
+        "x11_fail": ["X11 error", "cannot connect to X server"],
     }
 
     @classmethod

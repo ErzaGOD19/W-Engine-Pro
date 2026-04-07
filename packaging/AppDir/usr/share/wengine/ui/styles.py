@@ -77,7 +77,7 @@ QPushButton#nav_btn[active="true"] {
 /* Action Buttons (Apply, Stop, Add, etc.) */
 QPushButton#apply_btn, QPushButton#add_btn, QPushButton#stop_btn, QPushButton#remove_btn {
     background-color: {{ACCENT_COLOR}};
-    color: white; 
+    color: white;
     font-weight: bold;
     border: 1px solid rgba(255, 255, 255, 0.1);
     min-width: 110px; /* Reduced from 140px */
@@ -142,6 +142,85 @@ QScrollBar::handle:vertical {
     background-color: {{BG_COLOR}};
     border: 2px solid {{ACCENT_COLOR}};
     border-radius: 24px;
+}
+
+/* Menu Styles */
+QMenu {
+    background-color: {{BG_COLOR}};
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 4px;
+}
+
+QMenu::item {
+    padding: 8px 24px;
+    color: {{TEXT_COLOR}};
+    border-radius: 4px;
+}
+
+QMenu::item:selected {
+    background-color: {{ACCENT_COLOR}};
+    color: white;
+}
+
+QMenu::separator {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.1);
+    margin: 4px 8px;
+}
+
+QMenuBar {
+    background-color: {{BG_COLOR}};
+    color: {{TEXT_COLOR}};
+}
+
+QMenuBar::item {
+    padding: 6px 12px;
+    background-color: transparent;
+}
+
+QMenuBar::item:selected {
+    background-color: {{ACCENT_COLOR}};
+    color: white;
+    border-radius: 4px;
+}
+
+/* ToolTip */
+QToolTip {
+    background-color: {{BG_COLOR}};
+    color: {{TEXT_COLOR}};
+    border: 1px solid {{ACCENT_COLOR}};
+    border-radius: 4px;
+    padding: 4px;
+}
+
+/* CheckBox Styles */
+QCheckBox {
+    spacing: 8px;
+    color: {{TEXT_COLOR}};
+}
+
+QCheckBox::indicator {
+    width: 20px;
+    height: 20px;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+QCheckBox::indicator:hover {
+    border: 2px solid {{ACCENT_COLOR}};
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+QCheckBox::indicator:checked {
+    background-color: {{ACCENT_COLOR}};
+    border: 2px solid {{ACCENT_COLOR}};
+}
+
+QCheckBox::indicator:checked:hover {
+    background-color: {{ACCENT_COLOR}};
+    border: 2px solid white;
 }
 """
 
