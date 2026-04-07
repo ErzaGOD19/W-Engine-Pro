@@ -1,5 +1,7 @@
-import mpv
 import logging
+
+import mpv
+
 from engines.base_engine import WallpaperEngineInterface
 
 
@@ -13,21 +15,35 @@ class MpvEngine(WallpaperEngineInterface):
         self.surface_handle = None
         self.monitor_info = None
 
-    def init(self, surface_handle, monitor_info):
+    def init(self, surface_handle, monitor_info, config=None):
         self.surface_handle = surface_handle
         self.monitor_info = monitor_info
+        self.config = config
+
+        # Check if video path is a YouTube URL to enable ytdl
+        video_path = config.get_setting("last_wallpaper", "") if config else ""
+        is_youtube = (
+            "youtube.com" in video_path or "youtu.be" in video_path
+            if video_path
+            else False
+        )
+
+        # Enable yt-dlp for YouTube URLs
+        ytdl_enabled = is_youtube
 
         try:
             self.player = mpv.MPV(
                 vo="null",
                 hwdec="auto",
                 loop_playlist="inf",
-                ytdl=False,
+                ytdl=ytdl_enabled,
                 terminal=False,
                 input_default_bindings=False,
                 input_vo_keyboard=False,
                 log_handler=logging.debug,
             )
+            if ytdl_enabled:
+                logging.info("[MPV Engine] YouTube support enabled (yt-dlp)")
         except Exception as e:
             logging.error(f"Failed to initialize MPV: {e}")
 
@@ -68,8 +84,7 @@ class MpvEngine(WallpaperEngineInterface):
 
         try:
             if key == "volume":
-                self.player.volume = float(value)
-
+                self.player.volume = int(value)
             elif key == "brightness":
                 self.player.brightness = int(value)
             elif key == "contrast":

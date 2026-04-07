@@ -34,6 +34,10 @@ class ResourceManager:
         if os.path.exists(thumb_path):
             return thumb_path
 
+        # Remote URLs (HTTP/HTTPS): try to obtain thumbnail using yt-dlp
+        if isinstance(video_path, str) and video_path.startswith(("http://", "https://")):
+            return self.get_remote_thumbnail(video_path, thumb_path)
+
         try:
             cmd = [
                 "ffmpeg",
@@ -55,3 +59,50 @@ class ResourceManager:
         except Exception as e:
             logging.error(f"Error generando thumbnail para {video_path}: {e}")
             return None
+
+    def get_remote_thumbnail(self, url, thumb_path=None):
+        """Attempt to retrieve a thumbnail for a remote URL (YouTube supported via yt-dlp)."""
+        try:
+            import urllib.request
+            # Try to obtain the thumbnail URL via yt-dlp if available
+            thumb_url = None
+            try:
+                out = subprocess.check_output(
+                    ["yt-dlp", "--skip-download", "--no-warnings", "--get-thumbnail", url],
+                    stderr=subprocess.DEVNULL,
+                ).decode().strip()
+                if out:
+                    thumb_url = out.splitlines()[0].strip()
+            except Exception:
+                thumb_url = None
+
+            if not thumb_url:
+                return None
+
+            if not thumb_path:
+                h = hashlib.md5(url.encode("utf-8")).hexdigest()
+                thumb_path = os.path.join(self.thumb_dir, f"{h}.jpg")
+
+            try:
+                urllib.request.urlretrieve(thumb_url, thumb_path)
+                return thumb_path if os.path.exists(thumb_path) else None
+            except Exception as e:
+                logging.debug(f"Failed to download thumbnail {thumb_url}: {e}")
+                return None
+        except Exception as e:
+            logging.debug(f"[get_remote_thumbnail] error: {e}")
+            return None
+
+    def list_remote_wallpapers(self):
+        """Return list of remote wallpapers persisted in config as dicts {'name','url','type'}."""
+        try:
+            entries = self.config.get_setting("remote_wallpapers", []) if self.config else []
+            result = []
+            for e in entries:
+                if isinstance(e, dict) and "url" in e:
+                    result.append({"name": e.get("name") or e.get("url").split("/")[-1], "url": e["url"], "type": e.get("type","Web")})
+                elif isinstance(e, str):
+                    result.append({"name": e.split("/")[-1], "url": e, "type": "Web"})
+            return result
+        except Exception:
+            return []

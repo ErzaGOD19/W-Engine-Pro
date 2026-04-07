@@ -1,60 +1,110 @@
+import logging
+import os
+import random
+from typing import Any
+
+from PySide6.QtCore import QSize, Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtGui import QColor, QKeyEvent, QPalette
 from PySide6.QtWidgets import (
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
+    QApplication,
+    QFrame,
     QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
     QSplitter,
     QStackedWidget,
-    QLabel,
-    QFrame,
-    QPushButton,
-    QMessageBox,
-    QApplication,
-    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import Qt, QSize, QThread, Signal, QObject, Slot, QTimer
-from PySide6.QtGui import QIcon, QColor, QPalette, QKeyEvent
-from typing import Any
-import os
-import logging
-import random
 
-from ui.sidebar import Sidebar
-from ui.pages import LibraryPage, MonitorPage, DesignPage, SettingsPage, AboutPage
-from ui.diagnostics_panel import DiagnosticsPanel
-from ui.properties_panel import PropertiesPanel
-from ui.url_dialog import UrlDialog
-from ui.styles import STYLE_TEMPLATE
+from core import i18n
+from core.desktop_helper import DesktopHelper
 from core.event_bus import EventBus
+from ui.diagnostics_panel import DiagnosticsPanel
+from ui.pages import AboutPage, LibraryPage, MonitorPage
+from ui.properties_panel import PropertiesPanel
+from ui.settings_panel import SettingsPanel
+from ui.sidebar import Sidebar
+from ui.styles import STYLE_TEMPLATE
+from ui.url_dialog import UrlDialog
+
+
+class ThumbnailLoaderWorker(QThread):
+    """Worker to load thumbnail in background and update UI when ready."""
+
+    thumbnailReady = Signal(str, str)  # url, thumbnail_path
+
+    def __init__(self, resources, url):
+        super().__init__()
+        self.resources = resources
+        self.url = url
+
+    def run(self):
+        if self.resources and self.url:
+            thumb_path = self.resources.get_thumbnail(self.url)
+            if thumb_path:
+                self.thumbnailReady.emit(self.url, thumb_path)
 
 
 class LibraryLoaderWorker(QThread):
     itemLoaded = Signal(str, str, str, str)
     finished = Signal()
 
-    def __init__(self, resources):
+    def __init__(self, resources, config=None):
         super().__init__()
         self.resources = resources
+        self.config = config
 
     def run(self):
-        if not self.resources:
-            return
-        wallpapers = self.resources.list_local_wallpapers()
-        for v in wallpapers:
-            name = os.path.basename(v)
-            thumb = self.resources.get_thumbnail(v)
-            self.itemLoaded.emit(name, "Video", thumb, v)
+        # Load local wallpapers
+        if self.resources:
+            wallpapers = self.resources.list_local_wallpapers()
+            for v in wallpapers:
+                name = os.path.basename(v)
+                thumb = self.resources.get_thumbnail(v)
+                self.itemLoaded.emit(name, "Video", thumb, v)
+
+        # Load remote wallpapers from config
+        if self.config:
+            remote_list = self.config.get_setting("remote_wallpapers", [])
+            for entry in remote_list:
+                if isinstance(entry, dict):
+                    url = entry.get("url")
+                    name = entry.get("name", url.split("/")[-1] if url else "Remote")
+                    w_type = entry.get("type", "Web")
+                elif isinstance(entry, str):
+                    url = entry
+                    name = url.split("/")[-1]
+                    w_type = "Web"
+                else:
+                    continue
+
+                # Generate thumbnail for remote URLs
+                thumb = None
+                if self.resources and url:
+                    thumb = self.resources.get_thumbnail(url)
+
+                self.itemLoaded.emit(name, w_type, thumb, url)
+
         self.finished.emit()
 
 
 class MainWindow(QMainWindow):
+    theme_changed = Signal()
+
     def __init__(self, controller=None, config=None, resources=None):
         super().__init__()
         self.controller = controller
         self.config = config
         self.resources = resources
+        self._apply_selection_connection = (
+            None  # Track specific connection for wallpaper selection
+        )
 
-        self.setWindowTitle("W-Engine Pro")
+        self.setWindowTitle(i18n.t("app_name"))
         self.resize(1200, 800)
 
         # Explicitly set window flags to ensure maximize button is available
@@ -78,7 +128,6 @@ class MainWindow(QMainWindow):
 
         self.sidebar = Sidebar()
         self.sidebar.pageChanged.connect(self.switch_page)
-        self.sidebar.stopAllRequested.connect(self.on_stop_all)
         self.sidebar.fullscreenRequested.connect(self.toggle_fullscreen)
         self.main_v_layout.addWidget(self.sidebar)
 
@@ -94,25 +143,27 @@ class MainWindow(QMainWindow):
         self.lib_page.addUrlRequested.connect(self.open_url_dialog)
 
         self.mon_page = MonitorPage(config=self.config)
-        self.design_page = DesignPage(config=self.config)
         self.diag_page = DiagnosticsPanel(controller=self.controller)
-        self.settings_page = SettingsPage(
+        self.settings_page = SettingsPanel(
             config=self.config, controller=self.controller
         )
         self.about_page = AboutPage()
 
         self.pages.addWidget(self.lib_page)
         self.pages.addWidget(self.mon_page)
-        self.pages.addWidget(self.design_page)
         self.pages.addWidget(self.diag_page)
         self.pages.addWidget(self.settings_page)
         self.pages.addWidget(self.about_page)
 
         self.content_splitter.addWidget(self.pages)
 
-        self.props_panel = PropertiesPanel()
+        self.props_panel = PropertiesPanel(config=self.config)
         self.props_panel.propertyChanged.connect(self.on_property_changed)
         self.props_panel.removeRequested.connect(self.on_remove_requested)
+        self.props_panel.stopAllRequested.connect(self.on_stop_all)
+        self.props_panel.startRequested.connect(self.on_start_requested)
+        self.props_panel.applyRequested.connect(self.on_apply_settings_requested)
+
         self.content_splitter.addWidget(self.props_panel)
 
         self.selection_timer = QTimer(self)
@@ -130,7 +181,6 @@ class MainWindow(QMainWindow):
         self.event_bus = EventBus.instance()
         self.event_bus.event_occurred.connect(self._on_event)
 
-        # Timer to debounce theme updates (Optimization)
         self.theme_timer = QTimer(self)
         self.theme_timer.setSingleShot(True)
         self.theme_timer.setInterval(100)
@@ -145,10 +195,34 @@ class MainWindow(QMainWindow):
 
         self._start_library_loading()
 
+        # GNOME Wayland experimental indicator in window title
+        self._check_gnome_experimental()
+
+    def _check_gnome_experimental(self):
+        """Check if running on GNOME Wayland and add experimental indicator to title."""
+        try:
+            profile = DesktopHelper.get_profile()
+            is_gnome = "gnome" in profile.compositor.lower()
+            is_wayland = profile.protocol.lower() == "wayland"
+
+            if is_gnome and is_wayland:
+                self._gnome_experimental_indicator = True
+                # Update window title to show experimental status
+                base_title = i18n.t("app_name")
+                self.setWindowTitle(f"{base_title} ⚠️ Experimental")
+                logging.info("[GNOME] Experimental indicator added to window title")
+        except Exception as e:
+            logging.warning(f"Failed to check GNOME environment: {e}")
+
     def _apply_initial_style(self):
         theme_name = self.config.get("theme", "Oscuro")
         accent_color = self.config.get("accent_color", "#3498db")
-        # Call _apply_theme which now handles scaling and transparency too
+        text_color = self.config.get("ui_text_color", "#ffffff")
+
+        from ui.sidebar import set_icon_theme_color
+
+        set_icon_theme_color(text_color)
+
         self._apply_theme(theme_name, accent_color)
         if hasattr(self, "about_page"):
             self.about_page.update_accent_color(accent_color)
@@ -251,6 +325,13 @@ class MainWindow(QMainWindow):
         else:
             self.setStyleSheet(style_sheet)
 
+        self.theme_changed.emit()
+
+        from ui.sidebar import set_icon_theme_color
+
+        set_icon_theme_color(text_color)
+        self.sidebar.refresh_icons()
+
         # 6. Palette sync for native dialogs
         palette = self.palette()
         q_accent = QColor(accent_color)
@@ -270,7 +351,6 @@ class MainWindow(QMainWindow):
         widgets = {
             "library": self.lib_page,
             "monitors": self.mon_page,
-            "design": self.design_page,
             "diagnostics": self.diag_page,
             "settings": self.settings_page,
             "about": self.about_page,
@@ -284,15 +364,32 @@ class MainWindow(QMainWindow):
                 self.about_page.shadow.setEnabled(name == "about")
 
     def on_stop_all(self):
-        if self.controller:
+        if self.controller and self.controller.renderer.is_running():
             self.controller.stop_all()
         self.slideshow_timer.stop()
+        self.props_panel.update_stop_button_state(False)
+
+    def on_start_requested(self):
+        if self.current_playlist:
+            self._apply_selection(self.current_playlist)
+            self.props_panel.update_stop_button_state(True)
 
     def _start_library_loading(self):
         self.lib_page.grid.clear()
-        self.loader_thread = LibraryLoaderWorker(self.resources)
+        self.loader_thread = LibraryLoaderWorker(self.resources, self.config)
         self.loader_thread.itemLoaded.connect(self._on_wallpaper_loaded)
+        self.loader_thread.finished.connect(self._on_library_load_finished)
         self.loader_thread.start()
+
+    def _on_library_load_finished(self):
+        """Restore selection of last wallpaper after library is loaded."""
+        if self.config:
+            last_wp = self.config.get_setting("last_wallpaper")
+            if last_wp:
+                # Select by URL/path stored in data
+                self.lib_page.grid.select_wallpaper(last_wp)
+                # Trigger selection to update UI
+                self.on_selection_changed(None, None)
 
     def _on_wallpaper_loaded(self, name, w_type, thumb, path):
         self.lib_page.grid.add_wallpaper(name, w_type, thumbnail_path=thumb, data=path)
@@ -336,16 +433,22 @@ class MainWindow(QMainWindow):
         self.props_panel.load_wallpaper(name, w_type, path, config=self.config)
         self.props_panel.preview_box.setPixmap(pixmap)
 
-        # Safer disconnection of the apply button to avoid RuntimeWarnings
-        try:
-            self.props_panel.apply_btn.clicked.disconnect()
-        except (TypeError, RuntimeError):
-            # Normal if no signal was connected
-            pass
+        # Disconnect only the specific wallpaper selection connection
+        # This preserves other connections like applyRequested for playback settings
+        if self._apply_selection_connection is not None:
+            try:
+                self.props_panel.apply_btn.clicked.disconnect(
+                    self._apply_selection_connection
+                )
+            except (TypeError, RuntimeError):
+                pass
+            self._apply_selection_connection = None
 
-        self.props_panel.apply_btn.clicked.connect(
-            lambda: self._apply_selection(self.current_playlist)
+        # Connect new wallpaper selection handler
+        self._apply_selection_connection = lambda: self._apply_selection(
+            self.current_playlist
         )
+        self.props_panel.apply_btn.clicked.connect(self._apply_selection_connection)
 
     def _apply_selection(self, playlist):
         if not playlist:
@@ -386,9 +489,6 @@ class MainWindow(QMainWindow):
             for m in self.controller.monitors:
                 self.controller.set_wallpaper_for_monitor(m["id"], path)
 
-    def on_wallpaper_selected(self, index):
-        pass
-
     def on_remove_requested(self):
         indexes = self.lib_page.grid.selectionModel().selectedIndexes()
         if not indexes:
@@ -401,21 +501,23 @@ class MainWindow(QMainWindow):
 
         if count == 1:
             item = self.lib_page.grid.model.item(unique_rows[0])
-            msg = f"¿Estás seguro de que deseas eliminar '{item.text()}'?"
+            msg = f"{i18n.t('confirm_delete_single').format(name=item.text())}"
         else:
-            msg = f"¿Estás seguro de que deseas eliminar {count} elemento(s)?"
+            msg = i18n.t("confirm_delete_multiple").format(count=count)
 
         res = QMessageBox.question(
-            self, "Confirmar Eliminación", msg, QMessageBox.Yes | QMessageBox.No
+            self, i18n.t("confirm_delete_title"), msg, QMessageBox.Yes | QMessageBox.No
         )
 
         if res == QMessageBox.Yes:
+            removed_urls = []
             for row in unique_rows:
                 item = self.lib_page.grid.model.item(row)
                 if not item:
                     continue
 
                 path = item.data(Qt.UserRole + 2)
+                removed_urls.append(path)
 
                 # Intentar borrar el archivo físico si es local
                 if path and os.path.exists(path) and os.path.isfile(path):
@@ -427,6 +529,30 @@ class MainWindow(QMainWindow):
 
                 self.lib_page.grid.model.removeRow(row)
 
+            # Eliminar de la configuración los wallpapers remotos y last_wallpaper
+            if self.config and removed_urls:
+                remote_list = self.config.get_setting("remote_wallpapers", [])
+                if remote_list:
+                    # Filtrar y mantener solo los que no fueron eliminados
+                    new_remote_list = []
+                    for entry in remote_list:
+                        url = entry.get("url") if isinstance(entry, dict) else entry
+                        if url not in removed_urls:
+                            new_remote_list.append(entry)
+
+                    # Solo actualizar si hubo cambios
+                    if len(new_remote_list) != len(remote_list):
+                        self.config.set_setting("remote_wallpapers", new_remote_list)
+                        logging.info(
+                            f"Eliminados {len(remote_list) - len(new_remote_list)} wallpapers remotos de la configuración"
+                        )
+
+                # Si el wallpaper eliminado es el last_wallpaper, limpiar esa configuración
+                last_wp = self.config.get_setting("last_wallpaper")
+                if last_wp and last_wp in removed_urls:
+                    self.config.set_setting("last_wallpaper", None)
+                    logging.info("last_wallpaper limpiado de la configuración")
+
             # Limpiar selección y refrescar interfaz
             self.lib_page.grid.clearSelection()
             self.on_selection_changed(None, None)
@@ -436,6 +562,32 @@ class MainWindow(QMainWindow):
         logging.info(f"[UI] Property changed: {key} = {value}")
         if self.config:
             self.config.set(key, value)
+
+    def on_apply_settings_requested(self):
+        """Force apply playback settings changes, restarting backend if needed."""
+        logging.info("[UI] Apply settings requested - forcing backend restart")
+        if self.controller and self.controller.active_wallpapers:
+            # Force restart all active wallpapers to apply settings
+            for monitor_id, video_path in list(
+                self.controller.active_wallpapers.items()
+            ):
+                logging.info(f"[UI] Restarting wallpaper on monitor {monitor_id}")
+                self.controller.renderer.restart(self.config, video_path)
+        # Persist config to disk immediately to avoid losing playback settings
+        try:
+            if self.config:
+                if hasattr(self.config, "_save") and callable(
+                    getattr(self.config, "_save")
+                ):
+                    # Internal fast-save
+                    self.config._save()
+                elif hasattr(self.config, "save") and callable(
+                    getattr(self.config, "save")
+                ):
+                    # Fallback if public API exists
+                    self.config.save()
+        except Exception as e:
+            logging.error(f"[UI] Error saving config after apply: {e}")
 
     def toggle_fullscreen(self):
         if self.isFullScreen():
@@ -459,6 +611,44 @@ class MainWindow(QMainWindow):
         if dialog.exec():
             data = dialog.result_data
             if data:
-                self.lib_page.grid.add_wallpaper(
-                    data["name"], data["type"], data=data["url"]
-                )
+                url = data["url"]
+                name = data["name"]
+                w_type = data["type"]
+
+                # Persist remote wallpaper in config
+                if self.config:
+                    remote_list = self.config.get_setting("remote_wallpapers", [])
+                    # Avoid duplicates
+                    existing_urls = [
+                        e.get("url") if isinstance(e, dict) else e for e in remote_list
+                    ]
+                    if url not in existing_urls:
+                        remote_list.append({"name": name, "url": url, "type": w_type})
+                        self.config.set_setting("remote_wallpapers", remote_list)
+
+                # Add wallpaper with placeholder thumbnail
+                self.lib_page.grid.add_wallpaper(name, w_type, data=url)
+
+                # Start background thumbnail loading
+                if self.resources:
+                    self.thumb_loader = ThumbnailLoaderWorker(self.resources, url)
+                    self.thumb_loader.thumbnailReady.connect(self._on_thumbnail_ready)
+                    self.thumb_loader.start()
+
+                # Automatically select and apply the newly added wallpaper
+                self.lib_page.grid.select_wallpaper(url)
+                # Trigger selection change to apply wallpaper
+                self.on_selection_changed(None, None)
+
+    def _on_thumbnail_ready(self, url, thumbnail_path):
+        """Update wallpaper thumbnail when background loading completes."""
+        self.lib_page.grid.update_thumbnail(url, thumbnail_path)
+        # Refresh selection if this is the currently selected wallpaper
+        selected_indexes = self.lib_page.grid.selectionModel().selectedIndexes()
+        for idx in selected_indexes:
+            item = self.lib_page.grid.model.itemFromIndex(idx)
+            if item and item.data(Qt.UserRole + 2) == url:
+                # Update preview in properties panel
+                pixmap = item.icon().pixmap(290, 165)
+                self.props_panel.preview_box.setPixmap(pixmap)
+                break
